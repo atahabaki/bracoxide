@@ -1,5 +1,4 @@
 pub fn expand(input: &str) -> Option<Vec<String>> {
-    println!("INPUT: {}", input);
     if input.is_empty() {
         return None;
     }
@@ -27,13 +26,11 @@ pub fn expand(input: &str) -> Option<Vec<String>> {
             _ => inside.push(c),
         }
     }
-    println!("INSIDE: {}", &inside);
     let parts = split(inside);
     if let Some(pieces) = parts {
         for piece in pieces {
             let (prefix, postfix) = fixes.clone();
             if piece.contains('{') || piece.contains('}') {
-                println!("PIECE: {}", &piece);
                 if let Some(recursive_parts) = expand(&piece) {
                     for recursive_part in recursive_parts {
                         let combination = combine(&prefix, &recursive_part, &postfix);
@@ -70,7 +67,6 @@ fn split(content: impl ToString) -> Option<Vec<String>> {
     let mut piece = String::new();
     while let Some(c) = iter.next() {
         match c {
-            '\\' => continue,
             '{' | '}' => {
                 piece.push(c);
                 if c == '{' {
