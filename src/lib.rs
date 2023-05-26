@@ -101,9 +101,7 @@ fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             },
         }
     }
-    if !buffers.0.is_empty() {
-        tokens.push(Token::Text(buffers.0.clone()));
-    }
+    tokenize_buffers(&mut tokens, &mut buffers);
     Ok(tokens)
 }
 
