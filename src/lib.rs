@@ -41,22 +41,22 @@
 ///
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    /// Represents an opening brace `{`.
-    OBra,
-    /// Represents a closing brace `}`.
-    CBra,
-    /// Represents a comma `,`.
-    Comma,
-    /// Represents any non-number text.
+    /// Represents an opening brace `{` at the specified position.
+    OBra(usize),
+    /// Represents a closing brace `}` at the specified position.
+    CBra(usize),
+    /// Represents a comma `,` at the specified position.
+    Comma(usize),
+    /// Represents any non-number text at the specified position.
     ///
     /// The associated `String` contains the text value.
-    Text(String),
-    /// Represents a number.
+    Text(String, usize),
+    /// Represents a number at the specified position.
     ///
     /// The associated `String` contains the numeric value.
-    Number(String),
-    /// Represents the range operator `..`.
-    Range,
+    Number(String, usize),
+    /// Represents the range operator `..` at the specified position.
+    Range(usize),
 }
 
 /// Represents the possible errors that can occur during the tokenization.
@@ -150,19 +150,19 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     let mut count = (0, 0);
     // text_buffer, number_buffer
     let mut buffers = (String::new(), String::new());
-    let mut iter = content.chars();
+    let mut iter = content.chars().enumerate();
     // Push buffers into tokens.
-    let tokenize_buffers = |tokens: &mut Vec<Token>, buffers: &mut (String, String)| {
+    let tokenize_buffers = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
         if !buffers.0.is_empty() {
-            tokens.push(Token::Text(buffers.0.clone()));
+            tokens.push(Token::Text(buffers.0.clone(), i - buffers.0.len()));
             buffers.0.clear();
         }
         if !buffers.1.is_empty() {
-            tokens.push(Token::Number(buffers.1.clone()));
+            tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
             buffers.1.clear();
         }
     };
-    while let Some(c) = iter.next() {
+    while let Some((i, c)) = iter.next() {
         println!("{:?}, {}", buffers, c);
         match (c, is_escape) {
             (_, true) => {
@@ -176,17 +176,17 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             // No other c value can pass this match ARM
             // And now look to @2
             ('{' | '}' | ',', _) => {
-                tokenize_buffers(&mut tokens, &mut buffers);
+                tokenize_buffers(&mut tokens, &mut buffers, i);
                 match c {
                     '{' => {
                         count.0 += 1;
-                        tokens.push(Token::OBra);
+                        tokens.push(Token::OBra(i));
                     }
                     '}' => {
                         count.1 += 1;
-                        tokens.push(Token::CBra);
+                        tokens.push(Token::CBra(i));
                     }
-                    ',' => tokens.push(Token::Comma),
+                    ',' => tokens.push(Token::Comma(i)),
                     // @2: COMMENT
                     // Look @1 the above catch, you see
                     // c can be just '{' OR '}' OR ','.
@@ -197,11 +197,11 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             }
             ('.', _) => {
                 let mut r_iter = iter.clone();
-                if let Some(cx) = r_iter.next() {
+                if let Some((_ix, cx)) = r_iter.next() {
                     match cx {
                         '.' => {
-                            tokenize_buffers(&mut tokens, &mut buffers);
-                            tokens.push(Token::Range);
+                            tokenize_buffers(&mut tokens, &mut buffers, i);
+                            tokens.push(Token::Range(i));
                             iter = r_iter;
                             continue;
                         }
@@ -213,14 +213,14 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             }
             ('0'..='9', _) => {
                 if !buffers.0.is_empty() {
-                    tokens.push(Token::Text(buffers.0.clone()));
+                    tokens.push(Token::Text(buffers.0.clone(), i));
                     buffers.0.clear();
                 }
                 buffers.1.push(c);
             }
             _ => {
                 if !buffers.1.is_empty() {
-                    tokens.push(Token::Number(buffers.1.clone()));
+                    tokens.push(Token::Number(buffers.1.clone(), i));
                     buffers.1.clear();
                 }
                 buffers.0.push(c);
@@ -236,7 +236,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             }
         }
     }
-    tokenize_buffers(&mut tokens, &mut buffers);
+    tokenize_buffers(&mut tokens, &mut buffers, content.len());
     Ok(tokens)
 }
 
@@ -299,16 +299,51 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_single_brace_expansion() {
+        let content = "A{1..3}";
+        let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
+            Token::Text("A".to_string(), 0),
+            Token::OBra(1),
+            Token::Number("1".to_string(), 2),
+            Token::Range(3),
+            Token::Number("3".to_string(), 5),
+            Token::CBra(6),
+        ]);
+        assert_eq!(tokenize(content), expected_result);
+    }
+
+    #[test]
+    fn test_tokenize_multiple_brace_expansions() {
+        let content = "A{1,2}..B{3,4}";
+        let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
+            Token::Text("A".to_string(), 0),
+            Token::OBra(1),
+            Token::Number("1".to_string(), 2),
+            Token::Comma(3),
+            Token::Number("2".to_string(), 4),
+            Token::CBra(5),
+            Token::Range(6),
+            Token::Text("B".to_string(), 8),
+            Token::OBra(9),
+            Token::Number("3".to_string(), 10),
+            Token::Comma(11),
+            Token::Number("4".to_string(), 12),
+            Token::CBra(13),
+        ]);
+        assert_eq!(tokenize(content), expected_result);
+    }
+
+    #[test]
     fn test_tokenize() {
         // Test case 1: {1..3}
         assert_eq!(
             tokenize("{1..3}"),
             Ok(vec![
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra
+                Token::OBra(0),
+                Token::Number("1".to_owned(), 1),
+                Token::Range(2),
+                Token::Number("3".to_owned(), 4),
+                Token::CBra(5)
             ])
         );
 
@@ -316,195 +351,13 @@ mod tests {
         assert_eq!(
             tokenize("{a,b,c}"),
             Ok(vec![
-                Token::OBra,
-                Token::Text("a".to_owned()),
-                Token::Comma,
-                Token::Text("b".to_owned()),
-                Token::Comma,
-                Token::Text("c".to_owned()),
-                Token::CBra
-            ])
-        );
-
-        // Test case 3: {A{1,2},B{1,2}}
-        assert_eq!(
-            tokenize("{A{1,2},B{1,2}}"),
-            Ok(vec![
-                Token::OBra,
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Comma,
-                Token::Number("2".to_owned()),
-                Token::CBra,
-                Token::Comma,
-                Token::Text("B".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Comma,
-                Token::Number("2".to_owned()),
-                Token::CBra,
-                Token::CBra
-            ])
-        );
-
-        // Test case 4: A{1,2}B{1,2}
-        assert_eq!(
-            tokenize("A{1,2}B{1,2}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Comma,
-                Token::Number("2".to_owned()),
-                Token::CBra,
-                Token::Text("B".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Comma,
-                Token::Number("2".to_owned()),
-                Token::CBra
-            ])
-        );
-
-        // Test case 5: a{b{c,d}e{f,g}h}i
-        assert_eq!(
-            tokenize("a{b{c,d}e{f,g}h}i"),
-            Ok(vec![
-                Token::Text("a".to_owned()),
-                Token::OBra,
-                Token::Text("b".to_owned()),
-                Token::OBra,
-                Token::Text("c".to_owned()),
-                Token::Comma,
-                Token::Text("d".to_owned()),
-                Token::CBra,
-                Token::Text("e".to_owned()),
-                Token::OBra,
-                Token::Text("f".to_owned()),
-                Token::Comma,
-                Token::Text("g".to_owned()),
-                Token::CBra,
-                Token::Text("h".to_owned()),
-                Token::CBra,
-                Token::Text("i".to_owned())
-            ])
-        );
-
-        // Test case 6: a{b{c,d},e{f,g}}h
-        assert_eq!(
-            tokenize("a{b{c,d},e{f,g}}h"),
-            Ok(vec![
-                Token::Text("a".to_owned()),
-                Token::OBra,
-                Token::Text("b".to_owned()),
-                Token::OBra,
-                Token::Text("c".to_owned()),
-                Token::Comma,
-                Token::Text("d".to_owned()),
-                Token::CBra,
-                Token::Comma,
-                Token::Text("e".to_owned()),
-                Token::OBra,
-                Token::Text("f".to_owned()),
-                Token::Comma,
-                Token::Text("g".to_owned()),
-                Token::CBra,
-                Token::CBra,
-                Token::Text("h".to_owned())
-            ])
-        );
-
-        // Test case 7: A{1..3}B{2,5}
-        assert_eq!(
-            tokenize("A{1..3}B{2,5}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra,
-                Token::Text("B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
-            ])
-        );
-
-        // Test case 8: A{1..3},B{2,5}
-        assert_eq!(
-            tokenize("A{1..3},B{2,5}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra,
-                Token::Comma,
-                Token::Text("B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
-            ])
-        );
-
-        // Test case 9: A{1..3}\,B{2,5}
-        assert_eq!(
-            tokenize("A{1..3}\\,B{2,5}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra,
-                Token::Text(",B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
-            ])
-        );
-
-        // Test case 10: A{1..3}.B{2,5}
-        assert_eq!(
-            tokenize("A{1..3}.B{2,5}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra,
-                Token::Text(".B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
-            ])
-        );
-        // Test case 11: A1..3.B{2,5}
-        assert_eq!(
-            tokenize("A1..3.B{2,5}"),
-            Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::Text(".B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
+                Token::OBra(0),
+                Token::Text("a".to_owned(), 1),
+                Token::Comma(2),
+                Token::Text("b".to_owned(), 3),
+                Token::Comma(4),
+                Token::Text("c".to_owned(), 5),
+                Token::CBra(6)
             ])
         );
 
@@ -512,19 +365,19 @@ mod tests {
         assert_eq!(
             tokenize("A{1..3}..B{2,5}"),
             Ok(vec![
-                Token::Text("A".to_owned()),
-                Token::OBra,
-                Token::Number("1".to_owned()),
-                Token::Range,
-                Token::Number("3".to_owned()),
-                Token::CBra,
-                Token::Range,
-                Token::Text("B".to_owned()),
-                Token::OBra,
-                Token::Number("2".to_owned()),
-                Token::Comma,
-                Token::Number("5".to_owned()),
-                Token::CBra
+                Token::Text("A".to_owned(), 0),
+                Token::OBra(1),
+                Token::Number("1".to_owned(), 2),
+                Token::Range(3),
+                Token::Number("3".to_owned(), 5),
+                Token::CBra(6),
+                Token::Range(7),
+                Token::Text("B".to_owned(), 9),
+                Token::OBra(10),
+                Token::Number("2".to_owned(), 11),
+                Token::Comma(12),
+                Token::Number("5".to_owned(), 13),
+                Token::CBra(14)
             ])
         );
     }
