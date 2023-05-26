@@ -1,3 +1,20 @@
+/*
+ * This file is part of bracoxide.
+ *
+ * bracoxide is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * bracoxide is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with bracoxide. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 //! This crate provides a powerful and intuitive way to perform string brace expansion.
 //! Brace expansion is a feature commonly found in shells and text processing tools,
 //! allowing you to generate all possible combinations of strings specified within
