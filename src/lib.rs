@@ -1,95 +1,110 @@
-pub fn expand(input: &str) -> Option<Vec<String>> {
-    if input.is_empty() {
-        return None;
-    }
-    let mut expansions = Vec::<String>::new();
-    let mut iter = input.chars();
-    let mut count = (0, 0); // right, left / open, close
-    let mut fixes = (String::new(), String::new()); // prefix, postfix
-    let mut inside = String::new();
-    while let Some(c) = iter.next() {
-        match c {
-            '{' => {
-                if count.0 != 0 {
-                    inside.push(c);
-                }
-                count.0 += 1;
-            }
-            '}' => {
-                count.1 += 1;
-                if count.0 != count.1 {
-                    inside.push(c);
-                }
-            }
-            _ if count.0 == 0 => fixes.0.push(c),
-            _ if count.0 == count.1 => fixes.1.push(c),
-            _ => inside.push(c),
-        }
-    }
-    let parts = split(inside);
-    if let Some(pieces) = parts {
-        for piece in pieces {
-            let (prefix, postfix) = fixes.clone();
-            if piece.contains('{') || piece.contains('}') {
-                if let Some(recursive_parts) = expand(&piece) {
-                    for recursive_part in recursive_parts {
-                        let combination = combine(&prefix, &recursive_part, &postfix);
-                        expansions.push(combination);
-                    }
-                }
-            } else {
-                let combination = combine(&prefix, &piece, &postfix);
-                expansions.push(combination);
-            }
-        }
-    } else {
-        return None;
-    }
-    if expansions.is_empty() {
-        None
-    } else {
-        Some(expansions)
-    }
+///
+///
+#[derive(Debug, PartialEq)]
+enum Token {
+    //{
+    OBra,
+    //}
+    CBra,
+    //,
+    Comma,
+    //Any Non-number text
+    Text(String),
+    //Number
+    Number(String),
+    //..
+    Range,
 }
 
-fn combine(prefix: &str, content: &str, postfix: &str) -> String {
-    format!("{}{}{}", prefix, content, postfix)
+#[derive(Debug, PartialEq)]
+enum TokenizeError {
+    EmptyContent,
+    Unpredicted,
 }
 
-fn split(content: impl ToString) -> Option<Vec<String>> {
-    let content = content.to_string();
+fn tokenize(content: &str) -> Result<Vec<Token>, TokenizeError> {
     if content.is_empty() {
-        return None;
+        return Err(TokenizeError::EmptyContent);
     }
-    let mut pieces: Vec<String> = Vec::new();
+    let mut tokens = Vec::<Token>::new();
+    let mut is_escape = false;
+    // text_buffer, number_buffer
+    let mut buffers = (String::new(), String::new());
     let mut iter = content.chars();
-    let mut count = (0, 0); // right, left / open, close
-    let mut piece = String::new();
+    // Push buffers into tokens.
+    let tokenize_buffers = |tokens: &mut Vec<Token>, buffers: &mut (String, String)| {
+        if !buffers.0.is_empty() {
+            tokens.push(Token::Text(buffers.0.clone()));
+            buffers.0.clear();
+        }
+        if !buffers.1.is_empty() {
+            tokens.push(Token::Number(buffers.1.clone()));
+            buffers.1.clear();
+        }
+    };
     while let Some(c) = iter.next() {
-        match c {
-            '{' | '}' => {
-                piece.push(c);
-                if c == '{' {
-                    count.0 += 1;
-                } else {
-                    count.1 += 1;
+        println!("{:?}, {}",buffers, c);
+        match (c, is_escape) {
+            (_, true) => {
+                buffers.0.push(c);
+                buffers.1.clear();
+                is_escape = false;
+            }
+            ('\\', false) => is_escape = true,
+            // @1: COMMENT
+            // Look it is '{' OR '}' OR ','
+            // No other c value can pass this match ARM
+            // And now look to @2
+            ('{' | '}' | ',', _) => {
+                tokenize_buffers(&mut tokens, &mut buffers);
+                match c {
+                    '{' => tokens.push(Token::OBra),
+                    '}' => tokens.push(Token::CBra),
+                    ',' => tokens.push(Token::Comma),
+                    // @2: COMMENT
+                    // Look @1 the above catch, you see
+                    // c can be just '{' OR '}' OR ','.
+                    // AND Why the god damn rust wants me to handle all cases,
+                    // Where I got covered all cases above.
+                    _ => return Err(TokenizeError::Unpredicted),
                 }
             }
-            ',' if count.0 == count.1 => {
-                pieces.push(piece.clone());
-                piece.clear();
+            ('.', _) => {
+                let mut r_iter = iter.clone();
+                if let Some(cx) = r_iter.next() {
+                    match cx {
+                        '.' => {
+                            tokenize_buffers(&mut tokens, &mut buffers);
+                            tokens.push(Token::Range);
+                            iter = r_iter;
+                            continue;
+                        }
+                        _ => buffers.0.push(c),
+                    }
+                } else {
+                    buffers.0.push(c);
+                }
             }
-            _ => piece.push(c),
+            ('0'..='9', _) => {
+                if !buffers.0.is_empty() {
+                    tokens.push(Token::Text(buffers.0.clone()));
+                    buffers.0.clear();
+                }
+                buffers.1.push(c);
+            },
+            _ => {
+                if !buffers.1.is_empty() {
+                    tokens.push(Token::Number(buffers.1.clone()));
+                    buffers.1.clear();
+                }
+                buffers.0.push(c);
+            },
         }
     }
-    if !piece.is_empty() {
-        pieces.push(piece);
+    if !buffers.0.is_empty() {
+        tokens.push(Token::Text(buffers.0.clone()));
     }
-    if pieces.is_empty() {
-        None
-    } else {
-        Some(pieces)
-    }
+    Ok(tokens)
 }
 
 #[cfg(test)]
@@ -97,51 +112,233 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_expand_simple() {
-        let input = "c{d,e}f";
-        let expected_output: Vec<String> = vec!["cdf".into(), "cef".into()];
-        assert_eq!(expand(input), Some(expected_output));
-    }
+    fn test_tokenize() {
+        // Test case 1: {1..3}
+        assert_eq!(
+            tokenize("{1..3}"),
+            Ok(vec![
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra
+            ])
+        );
 
-    #[test]
-    fn test_expand_recursive1() {
-        let input = "a{b,c{d,e}f,g}h";
-        let output: Vec<String> = vec!["abh".into(), "acdfh".into(), "acefh".into(), "agh".into()];
-        assert_eq!(expand(input), Some(output));
-    }
+        // Test case 2: {a,b,c}
+        assert_eq!(
+            tokenize("{a,b,c}"),
+            Ok(vec![
+                Token::OBra,
+                Token::Text("a".to_owned()),
+                Token::Comma,
+                Token::Text("b".to_owned()),
+                Token::Comma,
+                Token::Text("c".to_owned()),
+                Token::CBra
+            ])
+        );
 
-    #[test]
-    fn test_expand_recursive2() {
-        let input = "a{b,c{d{1,2},e}f,g}h";
-        let output: Vec<String> = vec!["abh".into(), "acd1fh".into(), "acd2fh".into(), "acefh".into(), "agh".into()];
-        assert_eq!(expand(input), Some(output));
-    }
+        // Test case 3: {A{1,2},B{1,2}}
+        assert_eq!(
+            tokenize("{A{1,2},B{1,2}}"),
+            Ok(vec![
+                Token::OBra,
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Comma,
+                Token::Number("2".to_owned()),
+                Token::CBra,
+                Token::Comma,
+                Token::Text("B".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Comma,
+                Token::Number("2".to_owned()),
+                Token::CBra,
+                Token::CBra
+            ])
+        );
 
-    #[test]
-    fn test_split_complex1() {
-        let input = "b,c{d,e}f,g";
-        let output: Vec<String> = vec!["b".into(), "c{d,e}f".into(), "g".into()];
-        assert_eq!(split(input), Some(output));
-    }
+        // Test case 4: A{1,2}B{1,2}
+        assert_eq!(
+            tokenize("A{1,2}B{1,2}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Comma,
+                Token::Number("2".to_owned()),
+                Token::CBra,
+                Token::Text("B".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Comma,
+                Token::Number("2".to_owned()),
+                Token::CBra
+            ])
+        );
 
-    #[test]
-    fn test_split_complex2() {
-        let input = "a,b,c,d{e,f},g{h,i,j},k";
-        let output: Vec<String> = vec![
-            "a".into(),
-            "b".into(),
-            "c".into(),
-            "d{e,f}".into(),
-            "g{h,i,j}".into(),
-            "k".into(),
-        ];
-        assert_eq!(split(input), Some(output));
-    }
+        // Test case 5: a{b{c,d}e{f,g}h}i
+        assert_eq!(
+            tokenize("a{b{c,d}e{f,g}h}i"),
+            Ok(vec![
+                Token::Text("a".to_owned()),
+                Token::OBra,
+                Token::Text("b".to_owned()),
+                Token::OBra,
+                Token::Text("c".to_owned()),
+                Token::Comma,
+                Token::Text("d".to_owned()),
+                Token::CBra,
+                Token::Text("e".to_owned()),
+                Token::OBra,
+                Token::Text("f".to_owned()),
+                Token::Comma,
+                Token::Text("g".to_owned()),
+                Token::CBra,
+                Token::Text("h".to_owned()),
+                Token::CBra,
+                Token::Text("i".to_owned())
+            ])
+        );
 
-    #[test]
-    fn test_basic_brace_expansion() {
-        let input = "{apple,banana,cherry}";
-        let expected_output: Vec<String> = vec!["apple".into(), "banana".into(), "cherry".into()];
-        assert_eq!(expand(&input), Some(expected_output))
+        // Test case 6: a{b{c,d},e{f,g}}h
+        assert_eq!(
+            tokenize("a{b{c,d},e{f,g}}h"),
+            Ok(vec![
+                Token::Text("a".to_owned()),
+                Token::OBra,
+                Token::Text("b".to_owned()),
+                Token::OBra,
+                Token::Text("c".to_owned()),
+                Token::Comma,
+                Token::Text("d".to_owned()),
+                Token::CBra,
+                Token::Comma,
+                Token::Text("e".to_owned()),
+                Token::OBra,
+                Token::Text("f".to_owned()),
+                Token::Comma,
+                Token::Text("g".to_owned()),
+                Token::CBra,
+                Token::CBra,
+                Token::Text("h".to_owned())
+            ])
+        );
+
+        // Test case 7: A{1..3}B{2,5}
+        assert_eq!(
+            tokenize("A{1..3}B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra,
+                Token::Text("B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
+
+        // Test case 8: A{1..3},B{2,5}
+        assert_eq!(
+            tokenize("A{1..3},B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra,
+                Token::Comma,
+                Token::Text("B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
+
+        // Test case 9: A{1..3}\,B{2,5}
+        assert_eq!(
+            tokenize("A{1..3}\\,B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra,
+                Token::Text(",B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
+        
+        // Test case 10: A{1..3}.B{2,5}
+        assert_eq!(
+            tokenize("A{1..3}.B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra,
+                Token::Text(".B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
+        // Test case 11: A1..3.B{2,5}
+        assert_eq!(
+            tokenize("A1..3.B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::Text(".B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
+
+        // Test case 12: A{1..3}..B{2,5}
+        assert_eq!(
+            tokenize("A{1..3}..B{2,5}"),
+            Ok(vec![
+                Token::Text("A".to_owned()),
+                Token::OBra,
+                Token::Number("1".to_owned()),
+                Token::Range,
+                Token::Number("3".to_owned()),
+                Token::CBra,
+                Token::Range,
+                Token::Text("B".to_owned()),
+                Token::OBra,
+                Token::Number("2".to_owned()),
+                Token::Comma,
+                Token::Number("5".to_owned()),
+                Token::CBra
+            ])
+        );
     }
 }
