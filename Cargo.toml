@@ -1,5 +1,5 @@
 [package]
-name = "str_expand"
+name = "bracoxide"
 version = "0.1.0"
 edition = "2021"
 
