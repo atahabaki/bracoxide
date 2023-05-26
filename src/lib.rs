@@ -17,14 +17,14 @@ enum Token {
 }
 
 #[derive(Debug, PartialEq)]
-enum TokenizeError {
+pub enum TokenizationError {
     EmptyContent,
     Unpredicted,
 }
 
-fn tokenize(content: &str) -> Result<Vec<Token>, TokenizeError> {
+fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     if content.is_empty() {
-        return Err(TokenizeError::EmptyContent);
+        return Err(TokenizationError::EmptyContent);
     }
     let mut tokens = Vec::<Token>::new();
     let mut is_escape = false;
@@ -66,7 +66,7 @@ fn tokenize(content: &str) -> Result<Vec<Token>, TokenizeError> {
                     // c can be just '{' OR '}' OR ','.
                     // AND Why the god damn rust wants me to handle all cases,
                     // Where I got covered all cases above.
-                    _ => return Err(TokenizeError::Unpredicted),
+                    _ => return Err(TokenizationError::Unpredicted),
                 }
             }
             ('.', _) => {
