@@ -21,7 +21,7 @@
 /// type of token, such as opening brace, closing brace, comma, text, number, or range
 /// operator.
 ///
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     /// Represents an opening brace `{` at the specified position.
     OBra(usize),
@@ -46,13 +46,13 @@ pub enum Token {
 /// # Example
 ///
 /// ```rust,no_run
-/// use bracoxide::TokenizationError;
+/// use bracoxide::tokenizer::TokenizationError;
 ///
 /// let content = "{a, b, c, d";
-/// let tokenization_result = bracoxide::tokenize(content);
+/// let tokenization_result = bracoxide::tokenizer::tokenize(content);
 /// assert_eq!(tokenization_result, Err(TokenizationError::FormatNotSupported));
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenizationError {
     /// The content to be tokenized is empty.
     EmptyContent,
@@ -102,7 +102,7 @@ pub enum TokenizationError {
 /// # Examples
 ///
 /// ```
-/// use bracoxide::{Token, TokenizationError, tokenize};
+/// use bracoxide::tokenizer::{Token, TokenizationError, tokenize};
 ///
 /// let content = "{1, 2, 3}";
 /// let tokens = tokenize(content);
