@@ -145,7 +145,6 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
         }
     };
     while let Some((i, c)) = iter.next() {
-        println!("{:?}, {}", buffers, c);
         match (c, is_escape) {
             (_, true) => {
                 buffers.0.push(c);
@@ -195,14 +194,14 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
             }
             ('0'..='9', _) => {
                 if !buffers.0.is_empty() {
-                    tokens.push(Token::Text(buffers.0.clone(), i));
+                    tokens.push(Token::Text(buffers.0.clone(), i - buffers.0.len()));
                     buffers.0.clear();
                 }
                 buffers.1.push(c);
             }
             _ => {
                 if !buffers.1.is_empty() {
-                    tokens.push(Token::Number(buffers.1.clone(), i));
+                    tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
                     buffers.1.clear();
                 }
                 buffers.0.push(c);
@@ -290,6 +289,22 @@ mod tests {
             Token::Range(3),
             Token::Number("3".to_string(), 5),
             Token::CBra(6),
+        ]);
+        assert_eq!(tokenize(content), expected_result);
+        let content = "{AB12}";
+        let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
+            Token::OBra(0),
+            Token::Text("AB".to_string(), 1),
+            Token::Number("12".to_string(), 3),
+            Token::CBra(5),
+        ]);
+        assert_eq!(tokenize(content), expected_result);
+        let content = "{12AB}";
+        let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
+            Token::OBra(0),
+            Token::Number("12".to_string(), 1),
+            Token::Text("AB".to_string(), 3),
+            Token::CBra(5),
         ]);
         assert_eq!(tokenize(content), expected_result);
     }
