@@ -415,7 +415,7 @@ mod tests {
     use crate::tokenizer::Token;
 
     #[test]
-    fn test_prefix_simple() {
+    fn test_really_complex() {
         assert_eq!(
             parse(&vec![
                 Token::Text("A".into(), 0),
