@@ -40,7 +40,7 @@ pub enum Node {
         from: String,
         to: String,
         start: usize,
-        end: usize
+        end: usize,
     },
 }
 
@@ -91,7 +91,6 @@ pub enum ParsingError {
 /// * `Result<Node, ParsingError>` - A result containing the parsed AST nodes or an error.
 ///
 pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
-    println!("{:?}", tokens);
     if tokens.is_empty() {
         return Err(ParsingError::NoTokens);
     }
@@ -114,8 +113,11 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                 None
             };
             let postfix = if let Some(postfix) = seperated.2 {
-                let parsed = if postfix.iter().any(|t| matches!(t, Token::OBra(_) | Token::CBra(_))) {
-                    parse(&postfix) 
+                let parsed = if postfix
+                    .iter()
+                    .any(|t| matches!(t, Token::OBra(_) | Token::CBra(_)))
+                {
+                    parse(&postfix)
                 } else {
                     text(&postfix)
                 };
@@ -141,12 +143,8 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                 match token {
                     Token::OBra(s) | Token::CBra(s) | Token::Comma(s) => pos.1 = s.clone(),
                     Token::Text(b, s) | Token::Number(b, s) => {
-                        pos.1 = if b.len() == 1 {
-                            s.clone()
-                        } else {
-                            s + b.len()
-                        };
-                    },
+                        pos.1 = if b.len() == 1 { s.clone() } else { s + b.len() };
+                    }
                     Token::Range(s) => pos.1 = s + 1,
                 }
             }
@@ -317,7 +315,7 @@ fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
         to: limits.1,
         start: pos.0 - 1,
         // +1 for '.', +1 for `}`
-        end: pos.1 + 2 + len
+        end: pos.1 + 2 + len,
     })
 }
 
