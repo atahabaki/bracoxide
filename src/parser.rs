@@ -136,14 +136,14 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                     | Token::Comma(s)
                     | Token::Text(_, s)
                     | Token::Number(_, s)
-                    | Token::Range(s) => pos.0 = s.clone(),
+                    | Token::Range(s) => pos.0 = *s,
                 }
             }
             if let Some(token) = tokens.last() {
                 match token {
-                    Token::OBra(s) | Token::CBra(s) | Token::Comma(s) => pos.1 = s.clone(),
+                    Token::OBra(s) | Token::CBra(s) | Token::Comma(s) => pos.1 = *s,
                     Token::Text(b, s) | Token::Number(b, s) => {
-                        pos.1 = if b.len() == 1 { s.clone() } else { s + b.len() };
+                        pos.1 = if b.len() == 1 { *s } else { s + b.len() };
                     }
                     Token::Range(s) => pos.1 = s + 1,
                 }
@@ -156,7 +156,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                 end: pos.1,
             })
         }
-        Err(e) => return Err(e),
+        Err(e) => Err(e),
     }
 }
 
@@ -172,13 +172,13 @@ pub fn seperate(
         Inside,
         Postfix,
     }
-    let mut iter = tokens.iter();
+
     let mut count = (0_usize, 0_usize);
     let mut inside_tokens = vec![];
     let mut prefix_tokens = vec![];
     let mut postfix_tokens = vec![];
     let mut bracing_state = BracingState::Prefix;
-    while let Some(token) = iter.next() {
+    for token in tokens {
         match token {
             Token::OBra(_) => {
                 count.0 += 1;
@@ -194,10 +194,10 @@ pub fn seperate(
             Token::CBra(s) => {
                 count.1 += 1;
                 if count.0 < count.1 {
-                    return Err(ParsingError::ExtraCBra(s.clone()));
+                    return Err(ParsingError::ExtraCBra(*s));
                 }
                 match bracing_state {
-                    BracingState::Prefix => return Err(ParsingError::ExtraCBra(s.clone())),
+                    BracingState::Prefix => return Err(ParsingError::ExtraCBra(*s)),
                     BracingState::Inside => {
                         inside_tokens.push(token.clone());
                         if count.0 == count.1 {
@@ -208,7 +208,7 @@ pub fn seperate(
                 }
             }
             Token::Comma(s) | Token::Range(s) if bracing_state == BracingState::Prefix => {
-                return Err(ParsingError::OBraExpected(s.clone()));
+                return Err(ParsingError::OBraExpected(*s));
             }
             _ => match bracing_state {
                 BracingState::Prefix => prefix_tokens.push(token.clone()),
@@ -245,18 +245,18 @@ fn text(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     if let Some(token) = iter.next() {
         match token {
             Token::OBra(s) | Token::CBra(s) | Token::Comma(s) | Token::Range(s) => {
-                return Err(ParsingError::ExpectedText(s.clone()))
+                return Err(ParsingError::ExpectedText(*s))
             }
             Token::Text(b, s) | Token::Number(b, s) => {
                 buffer.push_str(b);
-                start = s.clone();
+                start = *s;
             }
         }
     }
-    while let Some(token) = iter.next() {
+    for token in iter {
         match token {
             Token::OBra(s) | Token::CBra(s) | Token::Comma(s) | Token::Range(s) => {
-                return Err(ParsingError::ExpectedText(s.clone()))
+                return Err(ParsingError::ExpectedText(*s))
             }
             Token::Text(b, _) | Token::Number(b, _) => buffer.push_str(b),
         }
@@ -276,16 +276,16 @@ fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     let mut is_first = true;
     let mut count = 0_u8;
     let mut pos = (0_usize, 0_usize);
-    let mut iter = tokens.iter();
-    while let Some(token) = iter.next() {
+
+    for token in tokens {
         match token {
-            Token::OBra(s) => return Err(ParsingError::ExtraOBra(s.clone())),
-            Token::CBra(s) => return Err(ParsingError::ExtraCBra(s.clone())),
-            Token::Comma(s) => return Err(ParsingError::InvalidCommaUsage(s.clone())),
-            Token::Text(_, s) => return Err(ParsingError::RangeCantHaveText(s.clone())),
+            Token::OBra(s) => return Err(ParsingError::ExtraOBra(*s)),
+            Token::CBra(s) => return Err(ParsingError::ExtraCBra(*s)),
+            Token::Comma(s) => return Err(ParsingError::InvalidCommaUsage(*s)),
+            Token::Text(_, s) => return Err(ParsingError::RangeCantHaveText(*s)),
             Token::Number(b, s) => {
                 if is_first {
-                    pos.0 = s.clone();
+                    pos.0 = *s;
                     is_first = false;
                 }
                 match is_start {
@@ -295,13 +295,13 @@ fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             }
             Token::Range(e) => {
                 if is_first {
-                    return Err(ParsingError::RangeStartLimitExpected(e.clone()));
+                    return Err(ParsingError::RangeStartLimitExpected(*e));
                 }
                 count += 1;
                 if count != 1 {
-                    return Err(ParsingError::ExtraRangeOperator(e.clone()));
+                    return Err(ParsingError::ExtraRangeOperator(*e));
                 }
-                pos.1 = e.clone();
+                pos.1 = *e;
                 is_start = false;
             }
         }
@@ -333,7 +333,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
         match token {
             Token::Comma(s) if count.0 == (count.1 + 1) => {
                 if current.is_empty() {
-                    return Err(ParsingError::InvalidCommaUsage(s.clone()));
+                    return Err(ParsingError::InvalidCommaUsage(*s));
                 }
                 collections.push(current.clone());
                 current.clear();
@@ -343,7 +343,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             }
             Token::OBra(start) => {
                 if count.0 == 0 {
-                    pos.0 = start.clone();
+                    pos.0 = *start;
                 } else {
                     current.push(token.clone());
                 }
@@ -352,7 +352,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             Token::CBra(end) => {
                 count.1 += 1;
                 if count.0 == count.1 {
-                    pos.1 = end.clone();
+                    pos.1 = *end;
                 } else {
                     current.push(token.clone());
                 }
@@ -364,7 +364,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
         collections.push(current);
     }
     match collections.len() {
-        0 => return Err(ParsingError::NothingInBraces(pos.0)),
+        0 => Err(ParsingError::NothingInBraces(pos.0)),
         1 => {
             // it is absolutely Text or Range
             // it can not be Collection.
@@ -374,8 +374,8 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             // if exist return range(&current)
             let collection = &collections[0];
             match collection.iter().any(|t| matches!(t, Token::Range(_))) {
-                true => range(&collection),
-                false => text(&collection),
+                true => range(collection),
+                false => text(collection),
             }
         }
         _ => {

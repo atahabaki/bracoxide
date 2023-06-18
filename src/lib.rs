@@ -68,17 +68,17 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
         } => {
             let mut inner = vec![];
             let prefixs: Vec<String> = if let Some(prefix) = prefix {
-                expand(&prefix)?
+                expand(prefix)?
             } else {
                 vec!["".to_owned()]
             };
             let insides: Vec<String> = if let Some(inside) = inside {
-                expand(&inside)?
+                expand(inside)?
             } else {
                 vec!["".to_owned()]
             };
             let postfixs: Vec<String> = if let Some(postfix) = postfix {
-                expand(&postfix)?
+                expand(postfix)?
             } else {
                 vec!["".to_owned()]
             };
@@ -91,7 +91,11 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
             }
             Ok(inner)
         }
-        parser::Node::Collection { items, start: _, end: _ } => {
+        parser::Node::Collection {
+            items,
+            start: _,
+            end: _,
+        } => {
             let mut inner = vec![];
             for item in items {
                 let expansions = expand(item)?;
@@ -128,8 +132,8 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::parser::Node;
+    use super::*;
     #[test]
     fn test_expand_complex() {
         assert_eq!(
