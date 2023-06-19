@@ -63,12 +63,6 @@ pub enum TokenizationError {
     BraceMismatch,
     /// The input content does not contain any braces.
     NoBraces,
-    /// An unexpected error occurred during tokenization.
-    ///
-    /// This error indicates a situation that is considered highly unlikely or
-    /// impossible to occur during normal operation. If you encounter this
-    /// error, please report it to the library maintainers for further investigation.
-    Unpredicted,
 }
 
 /// Tokenizes the provided content string and produces a vector of tokens.
@@ -95,9 +89,6 @@ pub enum TokenizationError {
 /// * [TokenizationError::FormatNotSupported] - If the `content` string has an unsupported format, such as
 ///   only an opening brace or closing brace without a corresponding pair.
 /// * [TokenizationError::BraceMismatch] - If the opening and closing braces in the `content` string do not match.
-/// * [TokenizationError::Unpredicted] - An unexpected error occurred during the tokenization process. This error
-///   indicates a situation that is considered highly unlikely or impossible to occur during normal operation.
-///   If you encounter this error, please report it to the maintainers of the `bracoxide` crate for further investigation.
 ///
 /// # Examples
 ///
@@ -173,7 +164,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                     // c can be just '{' OR '}' OR ','.
                     // AND Why the god damn rust wants me to handle all cases,
                     // Where I got covered all cases above.
-                    _ => return Err(TokenizationError::Unpredicted),
+                    _ => unreachable!(),
                 }
             }
             ('.', _) => {

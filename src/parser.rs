@@ -73,8 +73,6 @@ pub enum ParsingError {
     RangeCantHaveText(usize),
     /// Extra Range Operator have used, e.g. `{3..5..}`
     ExtraRangeOperator(usize),
-    /// Indicates an unpredicted parsing error.
-    Unpredicted,
 }
 
 /// Parses a sequence of tokens into an abstract syntax tree (AST).
