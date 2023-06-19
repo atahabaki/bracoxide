@@ -59,10 +59,6 @@ pub enum TokenizationError {
     /// The input content has an unsupported format (e.g., only an opening brace or closing
     /// brace).
     FormatNotSupported,
-    /// The opening and closing braces in the input content do not match.
-    BraceMismatch,
-    /// The input content does not contain any braces.
-    NoBraces,
 }
 
 /// Tokenizes the provided content string and produces a vector of tokens.
@@ -88,7 +84,6 @@ pub enum TokenizationError {
 /// * [TokenizationError::NoBraces] - If the `content` string does not contain any braces.
 /// * [TokenizationError::FormatNotSupported] - If the `content` string has an unsupported format, such as
 ///   only an opening brace or closing brace without a corresponding pair.
-/// * [TokenizationError::BraceMismatch] - If the opening and closing braces in the `content` string do not match.
 ///
 /// # Examples
 ///
@@ -202,11 +197,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     match count {
         (0, 0) => return Err(TokenizationError::NoBraces),
         (0, _) | (_, 0) => return Err(TokenizationError::FormatNotSupported),
-        (_, _) => {
-            if count.0 != count.1 {
-                return Err(TokenizationError::BraceMismatch);
-            }
-        }
+        (_, _) => ()
     }
     tokenize_buffers(&mut tokens, &mut buffers, content.len());
     Ok(tokens)
