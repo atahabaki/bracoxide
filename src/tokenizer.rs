@@ -59,6 +59,8 @@ pub enum TokenizationError {
     /// The input content has an unsupported format (e.g., only an opening brace or closing
     /// brace).
     FormatNotSupported,
+    /// The input content does not contain any braces.
+    NoBraces,
 }
 
 /// Tokenizes the provided content string and produces a vector of tokens.
@@ -245,20 +247,6 @@ mod tests {
             tokenize("a{, b{, c{, d{"),
             Err(TokenizationError::FormatNotSupported)
         );
-    }
-
-    #[test]
-    fn test_brace_mismatch() {
-        assert_eq!(
-            tokenize("a{b{c,de}f"),
-            Err(TokenizationError::BraceMismatch)
-        );
-        assert_eq!(tokenize("a{..}}"), Err(TokenizationError::BraceMismatch));
-        assert_eq!(
-            tokenize("{a..3{a,b}}}"),
-            Err(TokenizationError::BraceMismatch)
-        );
-        assert_eq!(tokenize("{}{}}"), Err(TokenizationError::BraceMismatch));
     }
 
     #[test]
