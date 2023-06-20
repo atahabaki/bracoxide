@@ -53,7 +53,7 @@ pub enum Token {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust
 /// use bracoxide::tokenizer::TokenizationError;
 ///
 /// let content = "{a, b, c, d";

@@ -85,7 +85,7 @@ pub enum ParsingError {
 
 /// Parses a sequence of tokens into an abstract syntax tree (AST).
 ///
-/// The `parse` function takes a vector of tokens as input and performs the parsing operation.
+/// The [parse] function takes a vector of tokens as input and performs the parsing operation.
 /// It returns a result with the parsed AST nodes on success, or a specific error on failure.
 ///
 /// # Arguments
@@ -95,7 +95,6 @@ pub enum ParsingError {
 /// # Returns
 ///
 /// * `Result<Node, ParsingError>` - A result containing the parsed AST nodes or an error.
-///
 pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     if tokens.is_empty() {
         return Err(ParsingError::NoTokens);
@@ -166,7 +165,17 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     }
 }
 
-pub fn seperate(
+/// Separates the given tokens into prefix, inside, and postfix sections based on the bracing structure.
+///
+/// # Arguments
+///
+/// * `tokens` - A vector of tokens to be separated.
+///
+/// # Returns
+///
+/// Returns a result containing tuples of optional vectors representing the prefix, inside, and 
+/// postfix sections respectively. If the separation fails, a [ParsingError] is returned.
+fn seperate(
     tokens: &Vec<Token>,
 ) -> Result<(Option<Vec<Token>>, Option<Vec<Token>>, Option<Vec<Token>>), ParsingError> {
     if tokens.is_empty() {
@@ -241,6 +250,16 @@ pub fn seperate(
     Ok((prefix, inside, postfix))
 }
 
+/// Parses a sequence of tokens into a text node.
+///
+/// # Arguments
+///
+/// * `tokens` - A vector of tokens representing the text to be parsed.
+///
+/// # Returns
+///
+/// Returns a result containing a [Node] representing the parsed text. If the parsing fails,
+/// a [ParsingError] is returned.
 fn text(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     if tokens.is_empty() {
         return Err(ParsingError::NoTokens);
@@ -273,6 +292,16 @@ fn text(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     })
 }
 
+/// Parses a sequence of tokens into a range node.
+///
+/// # Arguments
+///
+/// * `tokens` - A vector of tokens representing the range to be parsed.
+///
+/// # Returns
+///
+/// Returns a result containing a [Node] representing the parsed range.
+/// If the parsing fails, a [ParsingError] is returned.
 fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     if tokens.is_empty() {
         return Err(ParsingError::NoTokens);
@@ -325,6 +354,15 @@ fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     })
 }
 
+/// Parses a sequence of tokens into a [Node::Collection] node.
+///
+/// # Arguments
+///
+/// * `tokens` - A vector of tokens representing the collection to be parsed.
+///
+/// # Returns
+///
+/// Returns a result containing a [Node] representing the parsed collection. If the parsing fails, a [ParsingError] is returned.
 fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     if tokens.is_empty() {
         return Err(ParsingError::NoTokens);

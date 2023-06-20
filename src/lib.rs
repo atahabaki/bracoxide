@@ -42,11 +42,55 @@
 pub mod parser;
 pub mod tokenizer;
 
+/// An error type representing the failure to expand a parsed node.
+///
+/// This enum is used to indicate errors that can occur during the expansion of a parsed node.
+/// It provides detailed information about the specific type of error encountered.
+///
+/// # Variants
+///
+/// - `NumConversionFailed(String)`: An error indicating that a number conversion failed during expansion.
+///                                 It contains a string representing the value that failed to be converted.
 #[derive(Debug, PartialEq)]
 pub enum ExpansionError {
+    /// Error indicating that a number conversion failed during expansion.
     NumConversionFailed(String),
 }
 
+/// Expands the given parsed node into a vector of strings representing the expanded values.
+///
+/// # Arguments
+///
+/// * `node` - The parsed node to be expanded.
+///
+/// # Returns
+///
+/// Returns a result containing a vector of strings representing the expanded values. If the
+/// expansion fails, an `ExpansionError` is returned.
+///
+/// # Examples
+///
+/// ```
+/// use bracoxide::parser::Node;
+/// use bracoxide::{expand, ExpansionError};
+///
+/// let node = Node::Text { message: "Hello".to_owned(), start: 0 };
+/// let expanded = expand(&node);
+/// assert_eq!(expanded, Ok(vec!["Hello".to_owned()]));
+/// ```
+///
+/// # Panics
+///
+/// This function does not panic.
+///
+/// # Errors
+///
+/// Returns an `ExpansionError` if the expansion fails due to various reasons, such as
+/// failed number conversion or invalid syntax.
+///
+/// # Safety
+///
+/// This function operates on valid parsed nodes and does not use unsafe code internally.
 pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
     match node {
         parser::Node::Text { message, start: _ } => Ok(vec![message.to_owned()]),
