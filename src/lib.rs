@@ -165,6 +165,64 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
     }
 }
 
+/// Errors that can occur during the Brace Expansion process.
+#[derive(Debug, PartialEq)]
+pub enum OxidizationError {
+    TokenizationError(tokenizer::TokenizationError),
+    ParsingError(parser::ParsingError),
+    ExpansionError(ExpansionError),
+}
+
+/// Bracoxidize the provided content by tokenizing, parsing, and expanding brace patterns.
+///
+/// # Arguments
+///
+/// * `content` - The input string to be processed.
+///
+/// # Returns
+///
+/// Returns a `Result` containing the expanded brace patterns as `Vec<String>`,
+/// or an `OxidizationError` if an error occurs during the process.
+///
+/// # Examples
+///
+/// ```rust
+/// use bracoxide::{bracoxidize, OxidizationError};
+///
+/// fn main() {
+///     let content = "foo{1..3}bar";
+///     match bracoxidize(content) {
+///         Ok(expanded) => {
+///             println!("Expanded patterns: {:?}", expanded);
+///         }
+///         Err(error) => {
+///             eprintln!("Error occurred: {:?}", error);
+///         }
+///     }
+/// }
+/// ```
+pub fn bracoxidize(content: &str) -> Result<Vec<String>, OxidizationError> {
+    // Tokenize the input string
+    let tokens = match tokenizer::tokenize(content) {
+        Ok(tokens) => tokens,
+        Err(error) => return Err(OxidizationError::TokenizationError(error)),
+    };
+
+    // Parse the tokens into an abstract syntax tree
+    let ast = match parser::parse(&tokens) {
+        Ok(ast) => ast,
+        Err(error) => return Err(OxidizationError::ParsingError(error)),
+    };
+
+    // Expand the brace patterns in the AST
+    let expanded = match expand(&ast) {
+        Ok(expanded) => expanded,
+        Err(error) => return Err(OxidizationError::ExpansionError(error)),
+    };
+
+    Ok(expanded)
+}
+
 #[cfg(test)]
 mod tests {
     use super::parser::Node;
@@ -257,6 +315,38 @@ mod tests {
                 start: 0,
                 end: 26
             }),
+            Ok(vec![
+                "ABHJL3".to_owned(),
+                "ABHJL4".to_owned(),
+                "ABHJL5".to_owned(),
+                "ABHKL3".to_owned(),
+                "ABHKL4".to_owned(),
+                "ABHKL5".to_owned(),
+                "ACDFHJL3".to_owned(),
+                "ACDFHJL4".to_owned(),
+                "ACDFHJL5".to_owned(),
+                "ACDFHKL3".to_owned(),
+                "ACDFHKL4".to_owned(),
+                "ACDFHKL5".to_owned(),
+                "ACEFHJL3".to_owned(),
+                "ACEFHJL4".to_owned(),
+                "ACEFHJL5".to_owned(),
+                "ACEFHKL3".to_owned(),
+                "ACEFHKL4".to_owned(),
+                "ACEFHKL5".to_owned(),
+                "AGHJL3".to_owned(),
+                "AGHJL4".to_owned(),
+                "AGHJL5".to_owned(),
+                "AGHKL3".to_owned(),
+                "AGHKL4".to_owned(),
+                "AGHKL5".to_owned(),
+            ])
+        )
+    }
+    #[test]
+    fn test_expand_complex_bracoxidize() {
+        assert_eq!(
+            bracoxidize("A{B,C{D,E}F,G}H{J,K}L{3..5}"),
             Ok(vec![
                 "ABHJL3".to_owned(),
                 "ABHJL4".to_owned(),

@@ -207,7 +207,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     match count {
         (0, 0) => return Err(TokenizationError::NoBraces),
         (0, _) | (_, 0) => return Err(TokenizationError::FormatNotSupported),
-        (_, _) => ()
+        (_, _) => (),
     }
     tokenize_buffers(&mut tokens, &mut buffers, content.len());
     Ok(tokens)

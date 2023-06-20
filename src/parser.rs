@@ -173,7 +173,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
 ///
 /// # Returns
 ///
-/// Returns a result containing tuples of optional vectors representing the prefix, inside, and 
+/// Returns a result containing tuples of optional vectors representing the prefix, inside, and
 /// postfix sections respectively. If the separation fails, a [ParsingError] is returned.
 fn seperate(
     tokens: &Vec<Token>,
