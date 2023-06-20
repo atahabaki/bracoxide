@@ -36,6 +36,22 @@
 //! bracoxide = "0.1.0"
 //! ```
 //!
+//! ```rust
+//! use bracoxide::{bracoxidize, OxidizationError};
+//! 
+//! fn main() {
+//!     let content = "foo{1..3}bar";
+//!     match bracoxidize(content) {
+//!         Ok(expanded) => {
+//!             println!("Expanded patterns: {:?}", expanded);
+//!         }
+//!         Err(error) => {
+//!             eprintln!("Error occurred: {:?}", error);
+//!         }
+//!     }
+//! }
+//! ```
+//!
 //! We hope you find the str expand crate to be a valuable tool in your Rust projects.
 //! Happy string expansion!
 
