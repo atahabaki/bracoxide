@@ -1,3 +1,11 @@
+/*
+ * This file is part of bracoxide.
+ *
+ * bracoxide is under MIT license.
+ *
+ * Copyright (c) 2023 A. Taha Baki <atahabaki@pm.me>
+ */
+
 //! Provides functions and types for parsing tokens into an abstract syntax tree (AST).
 //!
 //! ## Overview

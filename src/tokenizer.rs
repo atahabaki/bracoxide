@@ -1,3 +1,11 @@
+/*
+ * This file is part of bracoxide.
+ *
+ * bracoxide is under MIT license.
+ *
+ * Copyright (c) 2023 A. Taha Baki <atahabaki@pm.me>
+ */
+
 //! Provides functionality for tokenizing input strings. It defines the
 //! [Token] enum, which represents individual tokens produced during tokenization, and the
 //! [tokenize] function, which converts an input string into a sequence of tokens.
