@@ -21,6 +21,28 @@ Add Bracoxide to your Cargo.toml:
 bracoxide = "0.1.0"
 ```
 
+## Usage
+
+Import the bracoxide crate and start expanding brace patterns:
+
+```rust
+use bracoxide::{bracoxidize, OxidizationError};
+
+fn main() {
+    let content = "foo{1..3}bar";
+    match bracoxidize(content) {
+        Ok(expanded) => {
+            println!("Expanded patterns: {:?}", expanded);
+        }
+        Err(error) => {
+            eprintln!("Error occurred: {:?}", error);
+        }
+    }
+}
+```
+
+For more details and advanced usage, please refer to the [API documentation](https://docs.rs/bracoxide).
+
 ## Contributing
 
 Contributions are welcome! If you encounter any issues or have ideas for improvements, 
