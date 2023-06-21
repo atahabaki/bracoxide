@@ -5,7 +5,7 @@ edition = "2021"
 description = "A feature-rich library for brace pattern combination, permutation generation, and error handling."
 repository = "https://github.com/atahabaki/bracoxide"
 license = "MIT"
-keywords = ["brace expansion","parsing","combination","permutation","string manipulation"]
+keywords = ["brace_expansion","parsing","combination","permutation","string_manipulation"]
 categories = ["parser-implementations"]
 
 [dependencies]
