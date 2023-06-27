@@ -1,7 +1,7 @@
 # {Bracoxide}
 
 [![Tests](https://github.com/atahabaki/bracoxide/actions/workflows/rust.yml/badge.svg)](https://github.com/atahabaki/bracoxide/actions/workflows/rust.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![Documentation](https://docs.rs/bracoxide/badge.svg)](https://docs.rs/bracoxide)
 
