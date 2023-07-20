@@ -69,7 +69,7 @@ pub enum ParsingError {
     RangeEndLimitExpected(usize),
     /// It is not Text, but expected to be a text.
     ExpectedText(usize),
-    /// Comma is used invalid, e.g. `{,A,B}` or `{A,}` or `{,}`
+    /// Comma is used invalid, e.g. `{A..,B}` or `{A,..B}`
     InvalidCommaUsage(usize),
     /// Extra Closing Brace, e.g. `{} }`
     ExtraCBra(usize),
