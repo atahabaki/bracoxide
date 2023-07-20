@@ -38,7 +38,7 @@
 //!
 //! ```rust
 //! use bracoxide::{bracoxidize, OxidizationError};
-//! 
+//!
 //! fn main() {
 //!     let content = "foo{1..3}bar";
 //!     match bracoxidize(content) {
