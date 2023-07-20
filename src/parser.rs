@@ -69,7 +69,7 @@ pub enum ParsingError {
     RangeEndLimitExpected(usize),
     /// It is not Text, but expected to be a text.
     ExpectedText(usize),
-    /// Comma is used invalid, e.g. `{,A,B}` or `{A,}` or `{,}`
+    /// Comma is used invalid, e.g. `{A..,B}` or `{A,..B}`
     InvalidCommaUsage(usize),
     /// Extra Closing Brace, e.g. `{} }`
     ExtraCBra(usize),
@@ -370,15 +370,24 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     // start and end positions.
     let mut pos = (0_usize, 0_usize);
     // in the seperate function, we're dealing with `{}}` or `{{}`, no need to deal with it here.
-    let mut count = (0, 0);
+    // count of OBra (`{`), CBra (`}`), and the seperator (`,`).
+    let mut count = (0_usize, 0_usize, 0_usize);
     let mut collections: Vec<Vec<Token>> = vec![];
     let mut current = vec![];
     for token in tokens {
         match token {
             Token::Comma(s) if count.0 == (count.1 + 1) => {
+                // increase the seperator count by 1.
+                count.2 += 1;
                 if current.is_empty() {
-                    return Err(ParsingError::InvalidCommaUsage(*s));
+                    match collections.len() == 0 {
+                        true => current.push(Token::Text(String::new(), s.clone())),
+                        // The previous token was comma.
+                        false => current.push(Token::Text(String::new(), s - 1)),
+                    }
                 }
+                // we dealt with if it's empty.
+                // so it can't be empty.
                 collections.push(current.clone());
                 current.clear();
             }
@@ -404,9 +413,10 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             _ => current.push(token.clone()),
         }
     }
-    if !current.is_empty() {
-        collections.push(current);
+    if current.is_empty() && collections.len() == count.2 {
+        current.push(Token::Text(String::new(), pos.1 - 1));
     }
+    collections.push(current);
     match collections.len() {
         0 => Err(ParsingError::NothingInBraces(pos.0)),
         1 => {
@@ -455,6 +465,132 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
 mod tests {
     use super::*;
     use crate::tokenizer::Token;
+
+    #[test]
+    fn test_feature_empty_collection_item_at_the_end() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Text("B".into(), 2),
+                Token::Comma(3),
+                Token::Text("C".into(), 4),
+                Token::Comma(5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: "B".into(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 4
+                        },
+                        Node::Text {
+                            message: String::new(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
+
+    #[test]
+    fn test_feature_empty_collection_item_at_the_start() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Comma(2),
+                Token::Text("B".into(), 3),
+                Token::Comma(4),
+                Token::Text("C".into(), 5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: String::new(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: "B".into(),
+                            start: 3
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
+
+    #[test]
+    fn test_feature_empty_collection_item_in_the_middle() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Text("B".into(), 2),
+                Token::Comma(3),
+                Token::Comma(4),
+                Token::Text("C".into(), 5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: "B".into(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: String::new(),
+                            start: 3
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
 
     #[test]
     fn test_really_complex() {
