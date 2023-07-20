@@ -370,15 +370,24 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     // start and end positions.
     let mut pos = (0_usize, 0_usize);
     // in the seperate function, we're dealing with `{}}` or `{{}`, no need to deal with it here.
-    let mut count = (0, 0);
+    // count of OBra (`{`), CBra (`}`), and the seperator (`,`).
+    let mut count = (0_usize, 0_usize, 0_usize);
     let mut collections: Vec<Vec<Token>> = vec![];
     let mut current = vec![];
     for token in tokens {
         match token {
             Token::Comma(s) if count.0 == (count.1 + 1) => {
+                // increase the seperator count by 1.
+                count.2 += 1;
                 if current.is_empty() {
-                    return Err(ParsingError::InvalidCommaUsage(*s));
+                    match collections.len() == 0 {
+                        true => current.push(Token::Text(String::new(), s.clone())),
+                        // The previous token was comma.
+                        false => current.push(Token::Text(String::new(), s - 1)),
+                    }
                 }
+                // we dealt with if it's empty.
+                // so it can't be empty.
                 collections.push(current.clone());
                 current.clear();
             }
@@ -404,9 +413,10 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
             _ => current.push(token.clone()),
         }
     }
-    if !current.is_empty() {
-        collections.push(current);
+    if current.is_empty() && collections.len() == count.2 {
+        current.push(Token::Text(String::new(), pos.1 - 1));
     }
+    collections.push(current);
     match collections.len() {
         0 => Err(ParsingError::NothingInBraces(pos.0)),
         1 => {
