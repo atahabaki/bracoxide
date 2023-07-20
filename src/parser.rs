@@ -457,6 +457,132 @@ mod tests {
     use crate::tokenizer::Token;
 
     #[test]
+    fn test_feature_empty_collection_item_at_the_end() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Text("B".into(), 2),
+                Token::Comma(3),
+                Token::Text("C".into(), 4),
+                Token::Comma(5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: "B".into(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 4
+                        },
+                        Node::Text {
+                            message: String::new(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
+
+    #[test]
+    fn test_feature_empty_collection_item_at_the_start() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Comma(2),
+                Token::Text("B".into(), 3),
+                Token::Comma(4),
+                Token::Text("C".into(), 5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: String::new(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: "B".into(),
+                            start: 3
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
+
+    #[test]
+    fn test_feature_empty_collection_item_in_the_middle() {
+        assert_eq!(
+            parse(&vec![
+                Token::Text("A".into(), 0),
+                Token::OBra(1),
+                Token::Text("B".into(), 2),
+                Token::Comma(3),
+                Token::Comma(4),
+                Token::Text("C".into(), 5),
+                Token::CBra(6),
+            ]),
+            Ok(Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    message: "A".into(),
+                    start: 0
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            message: "B".into(),
+                            start: 2
+                        },
+                        Node::Text {
+                            message: String::new(),
+                            start: 3
+                        },
+                        Node::Text {
+                            message: "C".into(),
+                            start: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 6
+                })),
+                postfix: None,
+                start: 0,
+                end: 6
+            })
+        )
+    }
+
+    #[test]
     fn test_really_complex() {
         assert_eq!(
             parse(&vec![
