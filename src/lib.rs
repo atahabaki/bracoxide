@@ -33,7 +33,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! bracoxide = "0.1.0"
+//! bracoxide = "0.1.2"
 //! ```
 //!
 //! ```rust
