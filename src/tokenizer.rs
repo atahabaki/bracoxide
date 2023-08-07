@@ -182,7 +182,13 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                             iter = r_iter;
                             continue;
                         }
-                        _ => buffers.0.push(c),
+                        _ => {
+                            if !buffers.1.is_empty() {
+                                tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
+                                buffers.1.clear();
+                            }
+                            buffers.0.push(c);
+                        }
                     }
                 } else {
                     buffers.0.push(c);
