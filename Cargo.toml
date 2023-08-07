@@ -1,6 +1,6 @@
 [package]
 name = "bracoxide"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A feature-rich library for brace pattern combination, permutation generation, and error handling."
 repository = "https://github.com/atahabaki/bracoxide"
