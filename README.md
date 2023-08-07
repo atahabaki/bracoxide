@@ -48,12 +48,35 @@ fn main() {
 
 For more details and advanced usage, please refer to the [API documentation](https://docs.rs/bracoxide).
 
-## Contributing
-
-Contributions are welcome! If you encounter any issues or have ideas for improvements, 
-please open an issue or submit a pull request. See our 
-[contribution guidelines](Contributing.md) for more information.
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+```rust
+match contribution {
+    /// found a bug or encountered an issue
+    Contribution::Issue => redirect!("https://github.com/atahabaki/bracoxide/issues"),
+    /// propose any changes
+    Contribution::Change => redirect!("https://github.com/atahabaki/bracoxide/pulls"),
+    /// have a question or need help
+    Contribution::Ask => redirect!("https://github.com/atahabaki/bracoxide/discussions"),
+}
+```
+
+Contributions are welcome!
+If you would like to contribute to this project, here are a few ways you can get involved:
+
+- **Report Issues**: If you encounter any issues or bugs, please let us know by
+[creating an issue](https://github.com/atahabaki/bracoxide/issues).
+Provide a detailed description of the problem, including steps to reproduce it if possible.
+- **Propose Changes**: If you have ideas for improvements or new features, we encourage you to
+[submit a pull request](https://github.com/atahabaki/bracoxide/pulls).
+We appreciate your contributions and will review and consider them.
+- **Ask Questions**: If you have any questions or need help with the project, feel free to 
+[start a discussion](https://github.com/atahabaki/bracoxide/discussions).
+We'll be happy to assist you.
+
+Please review our [contribution guidelines](Contributing.md) for more detailed information
+on how to contribute effectively.
