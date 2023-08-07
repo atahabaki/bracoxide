@@ -71,6 +71,20 @@ pub enum TokenizationError {
     NoBraces,
 }
 
+impl std::fmt::Display for TokenizationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenizationError::EmptyContent => write!(f, "Content is empty."),
+            TokenizationError::FormatNotSupported => {
+                write!(f, "Only opening brace or closing brace is used.")
+            }
+            TokenizationError::NoBraces => write!(f, "No braces have been used."),
+        }
+    }
+}
+
+impl std::error::Error for TokenizationError {}
+
 /// Tokenizes the provided content string and produces a vector of tokens.
 ///
 /// This function is part of the `bracoxide` crate and is used to tokenize a given string `content`.
