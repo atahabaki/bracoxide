@@ -182,7 +182,13 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                             iter = r_iter;
                             continue;
                         }
-                        _ => buffers.0.push(c),
+                        _ => {
+                            if !buffers.1.is_empty() {
+                                tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
+                                buffers.1.clear();
+                            }
+                            buffers.0.push(c);
+                        }
                     }
                 } else {
                     buffers.0.push(c);
@@ -353,6 +359,44 @@ mod tests {
                 Token::Comma(12),
                 Token::Number("5".to_owned(), 13),
                 Token::CBra(14)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_dots() {
+        assert_eq!(
+            tokenize("{1..3}"),
+            Ok(vec![
+                Token::OBra(0),
+                Token::Number("1".to_owned(), 1),
+                Token::Range(2),
+                Token::Number("3".to_owned(), 4),
+                Token::CBra(5),
+            ])
+        );
+        assert_eq!(
+            tokenize("{1.2.3,b}"),
+            Ok(vec![
+                Token::OBra(0),
+                Token::Number("1".to_owned(), 1),
+                Token::Text(".".to_owned(), 2),
+                Token::Number("2".to_owned(), 3),
+                Token::Text(".".to_owned(), 4),
+                Token::Number("3".to_owned(), 5),
+                Token::Comma(6),
+                Token::Text("b".to_owned(), 7),
+                Token::CBra(8),
+            ])
+        );
+        assert_eq!(
+            tokenize("{a.b.c,d}"),
+            Ok(vec![
+                Token::OBra(0),
+                Token::Text("a.b.c".to_owned(), 1),
+                Token::Comma(6),
+                Token::Text("d".to_owned(), 7),
+                Token::CBra(8),
             ])
         );
     }
