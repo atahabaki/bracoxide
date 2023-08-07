@@ -73,6 +73,18 @@ pub enum ExpansionError {
     NumConversionFailed(String),
 }
 
+impl std::fmt::Display for ExpansionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExpansionError::NumConversionFailed(content) => {
+                write!(f, "Number conversion of \"{}\" failed.", content)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ExpansionError {}
+
 /// Expands the given parsed node into a vector of strings representing the expanded values.
 ///
 /// # Arguments
