@@ -37,12 +37,15 @@
 //! ```
 //!
 //! ```rust
-//! use bracoxide::{bracoxidize, OxidizationError};
+//! use bracoxide::explode;
 //!
 //! fn main() {
 //!     let content = "foo{1..3}bar";
-//!     match bracoxidize(content) {
+//!     match explode(content) {
 //!         Ok(expanded) => {
+//!             // 1. `foo1bar`
+//!             // 2. `foo2bar`
+//!             // 3. `foo3bar`
 //!             println!("Expanded patterns: {:?}", expanded);
 //!         }
 //!         Err(error) => {
@@ -191,6 +194,15 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
             Ok(inner)
         }
     }
+}
+
+/// Same functionality as [bracoxidize] but with explosive materials. This crates' all
+/// Error types (except the [OxidizationError]) implements [std::error::Error] trait. Why not get all the benefits from it?
+pub fn explode(content: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let tokens = tokenizer::tokenize(content)?;
+    let ast = parser::parse(&tokens)?;
+    let expansions = expand(&ast)?;
+    Ok(expansions)
 }
 
 /// Errors that can occur during the Brace Expansion process.
