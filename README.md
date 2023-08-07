@@ -30,12 +30,13 @@ bracoxide = "0.1.2"
 Import the bracoxide crate and start expanding brace patterns:
 
 ```rust
-use bracoxide::{bracoxidize, OxidizationError};
+use bracoxide::explode;
 
 fn main() {
     let content = "foo{1..3}bar";
-    match bracoxidize(content) {
+    match explode(content) {
         Ok(expanded) => {
+            // [`foo1bar`, `foo2bar`, `foo3bar`]
             println!("Expanded patterns: {:?}", expanded);
         }
         Err(error) => {
