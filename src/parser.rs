@@ -83,6 +83,39 @@ pub enum ParsingError {
     ExtraRangeOperator(usize),
 }
 
+impl std::fmt::Display for ParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsingError::NoTokens => write!(f, "Token list is empty."),
+            ParsingError::OBraExpected(i) => write!(f, "An opening brace ({{) expected at {i}"),
+            ParsingError::CBraExpected(i) => write!(f, "A closing brace (}}) expected at {i}"),
+            ParsingError::RangeStartLimitExpected(i) => {
+                write!(f, "Range start limit not specified. Expected at {i}")
+            }
+            ParsingError::RangeEndLimitExpected(i) => {
+                write!(f, "Range end limit not specified. Expected at {i}")
+            }
+            ParsingError::ExpectedText(i) => write!(f, "Expected text at {i}."),
+            ParsingError::InvalidCommaUsage(i) => write!(f, "Unexpected comma at {i}"),
+            ParsingError::ExtraCBra(i) => write!(f, "Used extra closing bracket at {i}"),
+            ParsingError::ExtraOBra(i) => write!(f, "Used extra opening bracket at {i}"),
+            ParsingError::NothingInBraces(i) => write!(
+                f,
+                "Empty braces at {i} causes question whether to skip it or add to tree."
+            ),
+            ParsingError::RangeCantHaveText(i) => write!(
+                f,
+                "Unrecognized char at {i}. Range syntax doesn't allow other than [0-9.]"
+            ),
+            ParsingError::ExtraRangeOperator(i) => {
+                write!(f, "Extra range operator (..) used at {i}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParsingError {}
+
 /// Parses a sequence of tokens into an abstract syntax tree (AST).
 ///
 /// The [parse] function takes a vector of tokens as input and performs the parsing operation.
