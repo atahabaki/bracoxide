@@ -48,10 +48,6 @@ fn main() {
 
 For more details and advanced usage, please refer to the [API documentation](https://docs.rs/bracoxide).
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Contributing
 
 ```rust
@@ -80,3 +76,7 @@ We'll be happy to assist you.
 
 Please review our [contribution guidelines](Contributing.md) for more detailed information
 on how to contribute effectively.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
