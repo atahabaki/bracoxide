@@ -139,7 +139,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     let mut tokens = Vec::<Token>::new();
     let mut is_escape = false;
     // opening, closing
-    let mut count = (0, 0);
+    let mut count = (0_usize, 0_usize);
     // text_buffer, number_buffer
     let mut buffers = (String::new(), String::new());
     let mut iter = content.chars().enumerate();
