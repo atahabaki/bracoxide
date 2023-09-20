@@ -143,16 +143,22 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     // text_buffer, number_buffer
     let mut buffers = (String::new(), String::new());
     let mut iter = content.chars().enumerate();
-    // Push buffers into tokens.
-    let tokenize_buffers = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
+    let tokenize_text_buffer = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
         if !buffers.0.is_empty() {
             tokens.push(Token::Text(buffers.0.clone(), i - buffers.0.len()));
             buffers.0.clear();
         }
+    };
+    let tokenize_number_buffer = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
         if !buffers.1.is_empty() {
             tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
             buffers.1.clear();
         }
+    };
+    // Push buffers into tokens.
+    let tokenize_buffers = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
+        tokenize_text_buffer(tokens, buffers, i);
+        tokenize_number_buffer(tokens, buffers, i);
     };
     while let Some((i, c)) = iter.next() {
         match (c, is_escape) {
@@ -197,10 +203,7 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                             continue;
                         }
                         _ => {
-                            if !buffers.1.is_empty() {
-                                tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
-                                buffers.1.clear();
-                            }
+                            tokenize_number_buffer(&mut tokens, &mut buffers, i);
                             buffers.0.push(c);
                         }
                     }
@@ -209,17 +212,11 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                 }
             }
             ('0'..='9', _) => {
-                if !buffers.0.is_empty() {
-                    tokens.push(Token::Text(buffers.0.clone(), i - buffers.0.len()));
-                    buffers.0.clear();
-                }
+                tokenize_text_buffer(&mut tokens, &mut buffers, i);
                 buffers.1.push(c);
             }
             _ => {
-                if !buffers.1.is_empty() {
-                    tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
-                    buffers.1.clear();
-                }
+                tokenize_number_buffer(&mut tokens, &mut buffers, i);
                 buffers.0.push(c);
             }
         }
