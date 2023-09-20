@@ -9,3 +9,10 @@ keywords = ["brace_expansion","parsing","combination","permutation","string_mani
 categories = ["parser-implementations"]
 
 [dependencies]
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "explode_benchmark"
+harness = false

@@ -14,6 +14,8 @@
 //! It takes the output of the tokenizer and performs the necessary parsing operations to generate the AST nodes.
 //! The AST can then be used for further processing, interpretation, or code generation.
 
+use std::sync::Arc;
+
 use crate::tokenizer::Token;
 
 /// Represents a node in the parsed AST.
@@ -24,7 +26,7 @@ use crate::tokenizer::Token;
 pub enum Node {
     /// Represents a text node.
     /// It contains the text value and the starting position of the text.
-    Text { message: String, start: usize },
+    Text { message: Arc<String>, start: usize },
     /// Represents a brace expansion node.
     /// It includes the prefix, inside, and outside node, along with the
     /// starting positions.
@@ -45,8 +47,8 @@ pub enum Node {
     /// It contains the starting and ending numbers of the range, along with the
     /// starting position.
     Range {
-        from: String,
-        to: String,
+        from: Arc<String>,
+        to: Arc<String>,
         start: usize,
         end: usize,
     },
@@ -320,7 +322,7 @@ fn text(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
         }
     }
     Ok(Node::Text {
-        message: buffer,
+        message: Arc::new(buffer),
         start,
     })
 }
@@ -379,8 +381,8 @@ fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
     }
     let len = limits.1.len();
     Ok(Node::Range {
-        from: limits.0,
-        to: limits.1,
+        from: Arc::new(limits.0),
+        to: Arc::new(limits.1),
         start: pos.0 - 1,
         // +1 for '.', +1 for `}`
         end: pos.1 + 2 + len,
@@ -413,10 +415,10 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                 // increase the seperator count by 1.
                 count.2 += 1;
                 if current.is_empty() {
-                    match collections.len() == 0 {
-                        true => current.push(Token::Text(String::new(), s.clone())),
+                    match collections.is_empty() {
+                        true => current.push(Token::Text(Arc::new(String::new()), *s)),
                         // The previous token was comma.
-                        false => current.push(Token::Text(String::new(), s - 1)),
+                        false => current.push(Token::Text(Arc::new(String::new()), s - 1)),
                     }
                 }
                 // we dealt with if it's empty.
@@ -447,7 +449,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
         }
     }
     if current.is_empty() && collections.len() == count.2 {
-        current.push(Token::Text(String::new(), pos.1 - 1));
+        current.push(Token::Text(Arc::new(String::new()), pos.1 - 1));
     }
     collections.push(current);
     match collections.len() {
@@ -496,6 +498,8 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::tokenizer::Token;
 
@@ -503,31 +507,31 @@ mod tests {
     fn test_feature_empty_collection_item_at_the_end() {
         assert_eq!(
             parse(&vec![
-                Token::Text("A".into(), 0),
+                Token::Text(Arc::new("A".into()), 0),
                 Token::OBra(1),
-                Token::Text("B".into(), 2),
+                Token::Text(Arc::new("B".into()), 2),
                 Token::Comma(3),
-                Token::Text("C".into(), 4),
+                Token::Text(Arc::new("C".into()), 4),
                 Token::Comma(5),
                 Token::CBra(6),
             ]),
             Ok(Node::BraceExpansion {
                 prefix: Some(Box::new(Node::Text {
-                    message: "A".into(),
+                    message: Arc::new("A".into()),
                     start: 0
                 })),
                 inside: Some(Box::new(Node::Collection {
                     items: vec![
                         Node::Text {
-                            message: "B".into(),
+                            message: Arc::new("B".into()),
                             start: 2
                         },
                         Node::Text {
-                            message: "C".into(),
+                            message: Arc::new("C".into()),
                             start: 4
                         },
                         Node::Text {
-                            message: String::new(),
+                            message: Arc::new(String::new()),
                             start: 5
                         },
                     ],
@@ -545,31 +549,31 @@ mod tests {
     fn test_feature_empty_collection_item_at_the_start() {
         assert_eq!(
             parse(&vec![
-                Token::Text("A".into(), 0),
+                Token::Text(Arc::new("A".into()), 0),
                 Token::OBra(1),
                 Token::Comma(2),
-                Token::Text("B".into(), 3),
+                Token::Text(Arc::new("B".into()), 3),
                 Token::Comma(4),
-                Token::Text("C".into(), 5),
+                Token::Text(Arc::new("C".into()), 5),
                 Token::CBra(6),
             ]),
             Ok(Node::BraceExpansion {
                 prefix: Some(Box::new(Node::Text {
-                    message: "A".into(),
+                    message: Arc::new("A".into()),
                     start: 0
                 })),
                 inside: Some(Box::new(Node::Collection {
                     items: vec![
                         Node::Text {
-                            message: String::new(),
+                            message: Arc::new(String::new()),
                             start: 2
                         },
                         Node::Text {
-                            message: "B".into(),
+                            message: Arc::new("B".into()),
                             start: 3
                         },
                         Node::Text {
-                            message: "C".into(),
+                            message: Arc::new("C".into()),
                             start: 5
                         },
                     ],
@@ -587,31 +591,31 @@ mod tests {
     fn test_feature_empty_collection_item_in_the_middle() {
         assert_eq!(
             parse(&vec![
-                Token::Text("A".into(), 0),
+                Token::Text(Arc::new("A".into()), 0),
                 Token::OBra(1),
-                Token::Text("B".into(), 2),
+                Token::Text(Arc::new("B".into()), 2),
                 Token::Comma(3),
                 Token::Comma(4),
-                Token::Text("C".into(), 5),
+                Token::Text(Arc::new("C".into()), 5),
                 Token::CBra(6),
             ]),
             Ok(Node::BraceExpansion {
                 prefix: Some(Box::new(Node::Text {
-                    message: "A".into(),
+                    message: Arc::new("A".into()),
                     start: 0
                 })),
                 inside: Some(Box::new(Node::Collection {
                     items: vec![
                         Node::Text {
-                            message: "B".into(),
+                            message: Arc::new("B".into()),
                             start: 2
                         },
                         Node::Text {
-                            message: String::new(),
+                            message: Arc::new(String::new()),
                             start: 3
                         },
                         Node::Text {
-                            message: "C".into(),
+                            message: Arc::new("C".into()),
                             start: 5
                         },
                     ],
@@ -629,57 +633,57 @@ mod tests {
     fn test_really_complex() {
         assert_eq!(
             parse(&vec![
-                Token::Text("A".into(), 0),
+                Token::Text(Arc::new("A".into()), 0),
                 Token::OBra(1),
-                Token::Text("B".into(), 2),
+                Token::Text(Arc::new("B".into()), 2),
                 Token::Comma(3),
-                Token::Text("C".into(), 4),
+                Token::Text(Arc::new("C".into()), 4),
                 Token::OBra(5),
-                Token::Text("D".into(), 6),
+                Token::Text(Arc::new("D".into()), 6),
                 Token::Comma(7),
-                Token::Text("E".into(), 8),
+                Token::Text(Arc::new("E".into()), 8),
                 Token::CBra(9),
-                Token::Text("F".into(), 10),
+                Token::Text(Arc::new("F".into()), 10),
                 Token::Comma(11),
-                Token::Text("G".into(), 12),
+                Token::Text(Arc::new("G".into()), 12),
                 Token::CBra(13),
-                Token::Text("H".into(), 14),
+                Token::Text(Arc::new("H".into()), 14),
                 Token::OBra(15),
-                Token::Text("J".into(), 16),
+                Token::Text(Arc::new("J".into()), 16),
                 Token::Comma(17),
-                Token::Text("K".into(), 18),
+                Token::Text(Arc::new("K".into()), 18),
                 Token::CBra(19),
-                Token::Text("L".into(), 20),
+                Token::Text(Arc::new("L".into()), 20),
                 Token::OBra(21),
-                Token::Number("3".into(), 22),
+                Token::Number(Arc::new("3".into()), 22),
                 Token::Range(23),
-                Token::Number("5".into(), 25),
+                Token::Number(Arc::new("5".into()), 25),
                 Token::CBra(26),
             ]),
             Ok(Node::BraceExpansion {
                 prefix: Some(Box::new(Node::Text {
-                    message: "A".into(),
+                    message: Arc::new("A".into()),
                     start: 0
                 })),
                 inside: Some(Box::new(Node::Collection {
                     items: vec![
                         Node::Text {
-                            message: "B".into(),
+                            message: Arc::new("B".into()),
                             start: 2
                         },
                         Node::BraceExpansion {
                             prefix: Some(Box::new(Node::Text {
-                                message: "C".into(),
+                                message: Arc::new("C".into()),
                                 start: 4
                             })),
                             inside: Some(Box::new(Node::Collection {
                                 items: vec![
                                     Node::Text {
-                                        message: "D".into(),
+                                        message: Arc::new("D".into()),
                                         start: 6
                                     },
                                     Node::Text {
-                                        message: "E".into(),
+                                        message: Arc::new("E".into()),
                                         start: 8
                                     },
                                 ],
@@ -687,14 +691,14 @@ mod tests {
                                 end: 9
                             })),
                             postfix: Some(Box::new(Node::Text {
-                                message: "F".into(),
+                                message: Arc::new("F".into()),
                                 start: 10
                             })),
                             start: 4,
                             end: 10,
                         },
                         Node::Text {
-                            message: "G".into(),
+                            message: Arc::new("G".into()),
                             start: 12
                         }
                     ],
@@ -703,17 +707,17 @@ mod tests {
                 })),
                 postfix: Some(Box::new(Node::BraceExpansion {
                     prefix: Some(Box::new(Node::Text {
-                        message: "H".into(),
+                        message: Arc::new("H".into()),
                         start: 14
                     })),
                     inside: Some(Box::new(Node::Collection {
                         items: vec![
                             Node::Text {
-                                message: "J".into(),
+                                message: Arc::new("J".into()),
                                 start: 16
                             },
                             Node::Text {
-                                message: "K".into(),
+                                message: Arc::new("K".into()),
                                 start: 18
                             },
                         ],
@@ -722,12 +726,12 @@ mod tests {
                     })),
                     postfix: Some(Box::new(Node::BraceExpansion {
                         prefix: Some(Box::new(Node::Text {
-                            message: "L".into(),
+                            message: Arc::new("L".into()),
                             start: 20
                         })),
                         inside: Some(Box::new(Node::Range {
-                            from: "3".into(),
-                            to: "5".into(),
+                            from: Arc::new("3".into()),
+                            to: Arc::new("5".into()),
                             start: 21,
                             end: 26
                         })),
