@@ -21,6 +21,8 @@
 //! commas, text, numbers, and ranges. Each variant of the enum provides additional information
 //! related to the token, such as the position of the token in the input string.
 
+use std::sync::Arc;
+
 /// Defines the possible types of tokens that can be encountered during the process of
 /// tokenization.
 ///
@@ -40,11 +42,11 @@ pub enum Token {
     /// Represents any non-number text at the specified position.
     ///
     /// The associated `String` contains the text value.
-    Text(String, usize),
+    Text(Arc<String>, usize),
     /// Represents a number at the specified position.
     ///
     /// The associated `String` contains the numeric value.
-    Number(String, usize),
+    Number(Arc<String>, usize),
     /// Represents the range operator `..` at the specified position.
     Range(usize),
 }
@@ -145,13 +147,13 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     let mut iter = content.chars().enumerate();
     let tokenize_text_buffer = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
         if !buffers.0.is_empty() {
-            tokens.push(Token::Text(buffers.0.clone(), i - buffers.0.len()));
+            tokens.push(Token::Text(Arc::new(buffers.0.clone()), i - buffers.0.len()));
             buffers.0.clear();
         }
     };
     let tokenize_number_buffer = |tokens: &mut Vec<Token>, buffers: &mut (String, String), i| {
         if !buffers.1.is_empty() {
-            tokens.push(Token::Number(buffers.1.clone(), i - buffers.1.len()));
+            tokens.push(Token::Number(Arc::new(buffers.1.clone()), i - buffers.1.len()));
             buffers.1.clear();
         }
     };
@@ -278,27 +280,27 @@ mod tests {
     fn test_tokenize_single_brace_expansion() {
         let content = "A{1..3}";
         let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
-            Token::Text("A".to_string(), 0),
+            Token::Text(Arc::new("A".to_string()), 0),
             Token::OBra(1),
-            Token::Number("1".to_string(), 2),
+            Token::Number(Arc::new("1".to_string()), 2),
             Token::Range(3),
-            Token::Number("3".to_string(), 5),
+            Token::Number(Arc::new("3".to_string()), 5),
             Token::CBra(6),
         ]);
         assert_eq!(tokenize(content), expected_result);
         let content = "{AB12}";
         let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
             Token::OBra(0),
-            Token::Text("AB".to_string(), 1),
-            Token::Number("12".to_string(), 3),
+            Token::Text(Arc::new("AB".to_string()), 1),
+            Token::Number(Arc::new("12".to_string()), 3),
             Token::CBra(5),
         ]);
         assert_eq!(tokenize(content), expected_result);
         let content = "{12AB}";
         let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
             Token::OBra(0),
-            Token::Number("12".to_string(), 1),
-            Token::Text("AB".to_string(), 3),
+            Token::Number(Arc::new("12".to_string()), 1),
+            Token::Text(Arc::new("AB".to_string()), 3),
             Token::CBra(5),
         ]);
         assert_eq!(tokenize(content), expected_result);
@@ -308,18 +310,18 @@ mod tests {
     fn test_tokenize_multiple_brace_expansions() {
         let content = "A{1,2}..B{3,4}";
         let expected_result: Result<Vec<Token>, TokenizationError> = Ok(vec![
-            Token::Text("A".to_string(), 0),
+            Token::Text(Arc::new("A".to_string()), 0),
             Token::OBra(1),
-            Token::Number("1".to_string(), 2),
+            Token::Number(Arc::new("1".to_string()), 2),
             Token::Comma(3),
-            Token::Number("2".to_string(), 4),
+            Token::Number(Arc::new("2".to_string()), 4),
             Token::CBra(5),
             Token::Range(6),
-            Token::Text("B".to_string(), 8),
+            Token::Text(Arc::new("B".to_string()), 8),
             Token::OBra(9),
-            Token::Number("3".to_string(), 10),
+            Token::Number(Arc::new("3".to_string()), 10),
             Token::Comma(11),
-            Token::Number("4".to_string(), 12),
+            Token::Number(Arc::new("4".to_string()), 12),
             Token::CBra(13),
         ]);
         assert_eq!(tokenize(content), expected_result);
@@ -332,9 +334,9 @@ mod tests {
             tokenize("{1..3}"),
             Ok(vec![
                 Token::OBra(0),
-                Token::Number("1".to_owned(), 1),
+                Token::Number(Arc::new("1".to_owned()), 1),
                 Token::Range(2),
-                Token::Number("3".to_owned(), 4),
+                Token::Number(Arc::new("3".to_owned()), 4),
                 Token::CBra(5)
             ])
         );
@@ -344,11 +346,11 @@ mod tests {
             tokenize("{a,b,c}"),
             Ok(vec![
                 Token::OBra(0),
-                Token::Text("a".to_owned(), 1),
+                Token::Text(Arc::new("a".to_owned()), 1),
                 Token::Comma(2),
-                Token::Text("b".to_owned(), 3),
+                Token::Text(Arc::new("b".to_owned()), 3),
                 Token::Comma(4),
-                Token::Text("c".to_owned(), 5),
+                Token::Text(Arc::new("c".to_owned()), 5),
                 Token::CBra(6)
             ])
         );
@@ -357,18 +359,18 @@ mod tests {
         assert_eq!(
             tokenize("A{1..3}..B{2,5}"),
             Ok(vec![
-                Token::Text("A".to_owned(), 0),
+                Token::Text(Arc::new("A".to_owned()), 0),
                 Token::OBra(1),
-                Token::Number("1".to_owned(), 2),
+                Token::Number(Arc::new("1".to_owned()), 2),
                 Token::Range(3),
-                Token::Number("3".to_owned(), 5),
+                Token::Number(Arc::new("3".to_owned()), 5),
                 Token::CBra(6),
                 Token::Range(7),
-                Token::Text("B".to_owned(), 9),
+                Token::Text(Arc::new("B".to_owned()), 9),
                 Token::OBra(10),
-                Token::Number("2".to_owned(), 11),
+                Token::Number(Arc::new("2".to_owned()), 11),
                 Token::Comma(12),
-                Token::Number("5".to_owned(), 13),
+                Token::Number(Arc::new("5".to_owned()), 13),
                 Token::CBra(14)
             ])
         );
@@ -380,9 +382,9 @@ mod tests {
             tokenize("{1..3}"),
             Ok(vec![
                 Token::OBra(0),
-                Token::Number("1".to_owned(), 1),
+                Token::Number(Arc::new("1".to_owned()), 1),
                 Token::Range(2),
-                Token::Number("3".to_owned(), 4),
+                Token::Number(Arc::new("3".to_owned()), 4),
                 Token::CBra(5),
             ])
         );
@@ -390,13 +392,13 @@ mod tests {
             tokenize("{1.2.3,b}"),
             Ok(vec![
                 Token::OBra(0),
-                Token::Number("1".to_owned(), 1),
-                Token::Text(".".to_owned(), 2),
-                Token::Number("2".to_owned(), 3),
-                Token::Text(".".to_owned(), 4),
-                Token::Number("3".to_owned(), 5),
+                Token::Number(Arc::new("1".to_owned()), 1),
+                Token::Text(Arc::new(".".to_owned()), 2),
+                Token::Number(Arc::new("2".to_owned()), 3),
+                Token::Text(Arc::new(".".to_owned()), 4),
+                Token::Number(Arc::new("3".to_owned()), 5),
                 Token::Comma(6),
-                Token::Text("b".to_owned(), 7),
+                Token::Text(Arc::new("b".to_owned()), 7),
                 Token::CBra(8),
             ])
         );
@@ -404,9 +406,9 @@ mod tests {
             tokenize("{a.b.c,d}"),
             Ok(vec![
                 Token::OBra(0),
-                Token::Text("a.b.c".to_owned(), 1),
+                Token::Text(Arc::new("a.b.c".to_owned()), 1),
                 Token::Comma(6),
-                Token::Text("d".to_owned(), 7),
+                Token::Text(Arc::new("d".to_owned()), 7),
                 Token::CBra(8),
             ])
         );

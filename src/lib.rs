@@ -105,7 +105,7 @@ impl std::error::Error for ExpansionError {}
 /// use bracoxide::parser::Node;
 /// use bracoxide::{expand, ExpansionError};
 ///
-/// let node = Node::Text { message: "Hello".to_owned(), start: 0 };
+/// let node = Node::Text { message: "Hello".to_owned().into(), start: 0 };
 /// let expanded = expand(&node);
 /// assert_eq!(expanded, Ok(vec!["Hello".to_owned()]));
 /// ```
@@ -124,7 +124,7 @@ impl std::error::Error for ExpansionError {}
 /// This function operates on valid parsed nodes and does not use unsafe code internally.
 pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
     match node {
-        parser::Node::Text { message, start: _ } => Ok(vec![message.to_owned()]),
+        parser::Node::Text { message, start: _ } => Ok(vec![message.as_ref().to_owned()]),
         parser::Node::BraceExpansion {
             prefix,
             inside,
@@ -265,6 +265,8 @@ pub fn bracoxidize(content: &str) -> Result<Vec<String>, OxidizationError> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::parser::Node;
     use super::*;
     #[test]
@@ -272,28 +274,28 @@ mod tests {
         assert_eq!(
             expand(&Node::BraceExpansion {
                 prefix: Some(Box::new(Node::Text {
-                    message: "A".into(),
+                    message: Arc::new("A".into()),
                     start: 0
                 })),
                 inside: Some(Box::new(Node::Collection {
                     items: vec![
                         Node::Text {
-                            message: "B".into(),
+                            message: Arc::new("B".into()),
                             start: 2
                         },
                         Node::BraceExpansion {
                             prefix: Some(Box::new(Node::Text {
-                                message: "C".into(),
+                                message: Arc::new("C".into()),
                                 start: 4
                             })),
                             inside: Some(Box::new(Node::Collection {
                                 items: vec![
                                     Node::Text {
-                                        message: "D".into(),
+                                        message: Arc::new("D".into()),
                                         start: 6
                                     },
                                     Node::Text {
-                                        message: "E".into(),
+                                        message: Arc::new("E".into()),
                                         start: 8
                                     },
                                 ],
@@ -301,14 +303,14 @@ mod tests {
                                 end: 9
                             })),
                             postfix: Some(Box::new(Node::Text {
-                                message: "F".into(),
+                                message: Arc::new("F".into()),
                                 start: 10
                             })),
                             start: 4,
                             end: 10,
                         },
                         Node::Text {
-                            message: "G".into(),
+                            message: Arc::new("G".into()),
                             start: 12
                         }
                     ],
@@ -317,17 +319,17 @@ mod tests {
                 })),
                 postfix: Some(Box::new(Node::BraceExpansion {
                     prefix: Some(Box::new(Node::Text {
-                        message: "H".into(),
+                        message: Arc::new("H".into()),
                         start: 14
                     })),
                     inside: Some(Box::new(Node::Collection {
                         items: vec![
                             Node::Text {
-                                message: "J".into(),
+                                message: Arc::new("J".into()),
                                 start: 16
                             },
                             Node::Text {
-                                message: "K".into(),
+                                message: Arc::new("K".into()),
                                 start: 18
                             },
                         ],
@@ -336,12 +338,12 @@ mod tests {
                     })),
                     postfix: Some(Box::new(Node::BraceExpansion {
                         prefix: Some(Box::new(Node::Text {
-                            message: "L".into(),
+                            message: Arc::new("L".into()),
                             start: 20
                         })),
                         inside: Some(Box::new(Node::Range {
-                            from: "3".into(),
-                            to: "5".into(),
+                            from: Arc::new("3".into()),
+                            to: Arc::new("5".into()),
                             start: 21,
                             end: 26
                         })),
