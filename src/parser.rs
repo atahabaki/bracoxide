@@ -414,7 +414,7 @@ fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
                 count.2 += 1;
                 if current.is_empty() {
                     match collections.len() == 0 {
-                        true => current.push(Token::Text(String::new(), s.clone())),
+                        true => current.push(Token::Text(String::new(), *s)),
                         // The previous token was comma.
                         false => current.push(Token::Text(String::new(), s - 1)),
                     }
