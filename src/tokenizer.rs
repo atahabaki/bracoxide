@@ -206,7 +206,7 @@ impl<'a> Tokenizer<'a> {
                         State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         // Return error:
                         // Case: {}, completely empty braces.
-                        State::Opening => todo!(),
+                        State::Opening => return Err(TokenizationError::EmptyBraces),
                         State::Text => self.tokenize_text(),
                         State::Number => self.tokenize_number(),
                         State::Closing |
@@ -253,6 +253,9 @@ impl<'a> Tokenizer<'a> {
             }
         }
         self.tokenize_buffers();
+        if self.count.0 != self.count.1 {
+            return Err(TokenizationError::BracesDontMatch);
+        }
         Ok(())
     }
 }
@@ -272,6 +275,10 @@ mod tests {
     fn test_empty_braces_returns_empty_braces() {
         let mut tokenizer = Tokenizer::new("{}").unwrap();
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::EmptyBraces));
+        let mut tokenizer = Tokenizer::new("{{}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::EmptyBraces));
+        let mut tokenizer = Tokenizer::new("{}}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::EmptyBraces));
     }
 
     #[test]
@@ -280,9 +287,9 @@ mod tests {
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
         let mut tokenizer = Tokenizer::new("}").unwrap();
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
-        let mut tokenizer = Tokenizer::new("{}}").unwrap();
+        let mut tokenizer = Tokenizer::new("{A}}").unwrap();
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
-        let mut tokenizer = Tokenizer::new("{{}").unwrap();
+        let mut tokenizer = Tokenizer::new("{{A}").unwrap();
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
     }
 
