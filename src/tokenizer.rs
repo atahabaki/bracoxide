@@ -1,3 +1,11 @@
+/*
+ * This file is part of bracoxide.
+ *
+ * bracoxide is under MIT license.
+ *
+ * Copyright (c) 2023 A. Taha Baki <atahabaki@pm.me>
+ */
+
 use std::collections::HashMap;
 
 #[derive(PartialEq)]
@@ -45,11 +53,16 @@ impl StartPosition<usize> for Cut {
     }
 }
 
+#[derive(PartialEq)]
 #[cfg_attr(test,derive(Debug))]
 pub enum TokenizationError {
     NoContent,
+    EmptyBraces,
+    BracesDontMatch
 }
 
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Tokenizer<'a> {
     content: &'a str,
     state: State,
@@ -248,12 +261,35 @@ impl<'a> Tokenizer<'a> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{Tokenizer, TokenKind};
+    use super::*;
+
+    #[test]
+    fn test_empty_content_returns_nocontent() {
+        assert_eq!(Tokenizer::new(""), Err(TokenizationError::NoContent));
+    }
+
+    #[test]
+    fn test_empty_braces_returns_empty_braces() {
+        let mut tokenizer = Tokenizer::new("{}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::EmptyBraces));
+    }
+
+    #[test]
+    fn test_braces_dont_match() {
+        let mut tokenizer = Tokenizer::new("{").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        let mut tokenizer = Tokenizer::new("}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        let mut tokenizer = Tokenizer::new("{}}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        let mut tokenizer = Tokenizer::new("{{}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+    }
 
     #[test]
     fn test_simple_number() {
         let mut tokenizer = Tokenizer::new("10801920").unwrap();
-        tokenizer.tokenize();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Number(8));
@@ -263,7 +299,7 @@ mod tests {
     #[test]
     fn test_simple_text() {
         let mut tokenizer = Tokenizer::new("Salut\\, mon ami!").unwrap();
-        tokenizer.tokenize();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(5));
@@ -274,7 +310,7 @@ mod tests {
     #[test]
     fn test_simple_collection() {
         let mut tokenizer = Tokenizer::new("{A,B}").unwrap();
-        tokenizer.tokenize();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::OpeningBracket);
@@ -288,7 +324,7 @@ mod tests {
     #[test]
     fn test_simple_range() {
         let mut tokenizer = Tokenizer::new("{3..5}").unwrap();
-        tokenizer.tokenize();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::OpeningBracket);
@@ -303,7 +339,7 @@ mod tests {
     fn test_simple_expansion() {
 
         let mut tokenizer = Tokenizer::new("A{B,C}D{13..25}").unwrap();
-        tokenizer.tokenize();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
