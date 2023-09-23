@@ -19,7 +19,6 @@ pub enum TokenKind {
     /// Number's length
     Number(usize),
     Range,
-    Empty
 }
 
 #[derive(PartialEq)]
@@ -148,9 +147,9 @@ impl<'a> Tokenizer<'a> {
                 (State::Escape, _) => self.text_start(i),
                 (old_state, '\\') => {
                     match old_state {
-                        State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         State::Text => self.tokenize_text(),
                         State::Number => self.tokenize_number(),
+                        State::Comma |
                         State::Closing |
                         State::Opening |
                         State::None => (),
@@ -160,10 +159,6 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 (State::Number, '0'..='9') => self.number_cut.1 += 1,
-                (State::Comma, '0'..='9') => {
-                    self.insert_token(i, TokenKind::Comma);
-                    self.number_start(i);
-                }
                 (_, '0'..='9') => 
                 self.number_start(i),
                 (old_state, '.') => {
@@ -192,8 +187,8 @@ impl<'a> Tokenizer<'a> {
                         },
                         // continue text...
                         State::Text => {self.text_cut.1+=1; continue;}
-                        State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         // it is definitelly not a Range, so count as text.
+                        State::Comma |
                         State::Opening |
                         State::Closing => (),
                         State::Escape => unreachable!(),
@@ -204,11 +199,11 @@ impl<'a> Tokenizer<'a> {
                 }
                 (old_state, '{') => {
                     match old_state {
-                        State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         State::Text => self.tokenize_text(),
                         State::Number => self.tokenize_number(),
                         State::Opening |
                         State::Closing |
+                        State::Comma |
                         State::None => (),
                         State::Escape => unreachable!(),
                     }
@@ -216,12 +211,12 @@ impl<'a> Tokenizer<'a> {
                 }
                 (old_state, '}') => {
                     match old_state {
-                        State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         // Return error:
                         // Case: {}, completely empty braces.
                         State::Opening => return Err(TokenizationError::EmptyBraces),
                         State::Text => self.tokenize_text(),
                         State::Number => self.tokenize_number(),
+                        State::Comma |
                         State::Closing |
                         State::None => (),
                         State::Escape => unreachable!(),
@@ -230,32 +225,25 @@ impl<'a> Tokenizer<'a> {
                 }
                 (old_state, ',') => {
                     match old_state {
-                        State::Opening |
-                        State::Comma => {
-                            self.insert_token(i, TokenKind::Empty);
-                            continue;
-                        }
                         State::Text => self.tokenize_text(),
                         State::Number => self.tokenize_number(),
+                        State::Comma |
                         State::Closing |
+                        State::Opening |
                         State::None => (),
                         State::Escape => unreachable!(),
                     }
-                    self.insert_token(i, TokenKind::Comma);
                     self.state = State::Comma;
-                }
-                (State::Comma, _) => {
-                    self.insert_token(i-1, TokenKind::Comma);
-                    self.text_start(i);
+                    self.insert_token(i, TokenKind::Comma);
                 }
                 (old_state,_) => {
                     match old_state {
                         State::Number => self.tokenize_number(),
-                        State::Comma => self.insert_token(i-1, TokenKind::Comma),
                         State::Text => {
                             self.text_cut.1 += 1;
                             continue;
                         }
+                        State::Comma => self.tokenize_text(),
                         State::Opening |
                         State::Closing |
                         State::None => (),
@@ -434,7 +422,7 @@ mod tests {
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
-        expected_map.insert(2, TokenKind::Empty);
+        expected_map.insert(2, TokenKind::Comma);
         expected_map.insert(3, TokenKind::Text(1));
         expected_map.insert(4, TokenKind::Comma);
         expected_map.insert(5, TokenKind::Text(1));
@@ -451,7 +439,8 @@ mod tests {
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
         expected_map.insert(2, TokenKind::Text(1));
-        expected_map.insert(4, TokenKind::Empty);
+        expected_map.insert(3, TokenKind::Comma);
+        expected_map.insert(4, TokenKind::Comma);
         expected_map.insert(5, TokenKind::Text(1));
         expected_map.insert(6, TokenKind::ClosingBracket);
         expected_map.insert(7, TokenKind::Text(1));
@@ -468,7 +457,7 @@ mod tests {
         expected_map.insert(2, TokenKind::Text(1));
         expected_map.insert(3, TokenKind::Comma);
         expected_map.insert(4, TokenKind::Text(1));
-        expected_map.insert(5, TokenKind::Empty);
+        expected_map.insert(5, TokenKind::Comma);
         expected_map.insert(6, TokenKind::ClosingBracket);
         expected_map.insert(7, TokenKind::Text(1));
         assert_eq!(expected_map, tokenizer.tokens)
