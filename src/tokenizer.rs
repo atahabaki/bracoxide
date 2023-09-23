@@ -17,14 +17,16 @@ pub enum TokenKind {
     /// Number's length
     Number(usize),
     Range,
+    /// length
+    Empty(usize),
 }
 
 impl TokenKind {
     pub fn get_length(&self) -> usize {
         match self {
-            TokenKind::OpeningBracket | TokenKind::ClosingBracket | TokenKind::Comma => 1,
-            TokenKind::Number(l) | TokenKind::Text(l) => *l,
+            TokenKind::Empty(l) | TokenKind::Number(l) | TokenKind::Text(l) => *l,
             TokenKind::Range => 2,
+            _ => 1,
         }
     }
     pub fn next_position(&self, current: usize) -> usize {
@@ -40,6 +42,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Comma => write!(f, "Comma"),
             TokenKind::Text(l) => write!(f, "Text, len: {}", l),
             TokenKind::Number(l) => write!(f, "Number, len: {}", l),
+            TokenKind::Empty(l) => write!(f, "Empty, len: {}", l),
             TokenKind::Range => write!(f, "Range"),
         }
     }
@@ -178,7 +181,7 @@ impl<'a> Tokenizer<'a> {
     }
     pub fn tokenize(&mut self) -> Result<(), TokenizationError> {
         let mut iter = self.content.chars().enumerate();
-        while let Some((i, c)) = iter.next() {
+        'tokenize: while let Some((i, c)) = iter.next() {
             match (&self.state, c) {
                 (State::Escape, _) => self.text_start(i),
                 (_, '\\') => {
@@ -218,8 +221,9 @@ impl<'a> Tokenizer<'a> {
                     self.tokenize_buffers();
                     self.insert_closing(i);
                 }
-                (_, ',') => {
-                    if self.count.0 == 0 || self.count.0 == self.count.1 {
+                (old_state, ',') => {
+                    let was_opening = old_state == &State::Opening;
+                    if (self.count.0 == 0 || self.count.0 == self.count.1) && !was_opening {
                         // w- escaping: `{A,B,C},D` -> [`A,D`, `B,D`, `C,D`]
                         // w/ escaping: `{A,B,C}\,D` -> [`A,D`, `B,D`, `C,D`]
                         if self.text_cut.1 >= 1 {
@@ -229,9 +233,42 @@ impl<'a> Tokenizer<'a> {
                             self.text_start(i);
                         }
                     } else {
+                        // HOW:
+                        // 1. if the previous token was `{` or
+                        // 2. if the count of consecutive commas (i.e. `,,,,`) are > 1
+                        // 3. if the next token is `}` then its empty token.
+                        // otherwise it is normal comma.
+                        // PR, when you find a better algorithm.
                         self.tokenize_buffers();
+                        let mut comma_count = 1_usize;
+                        let mut counter = iter.clone();
+                        let mut prev_iter = iter.clone();
+                        'commacounter: while let Some((ni, nc)) = counter.next() {
+                            match nc {
+                                ',' => {
+                                    comma_count += 1;
+                                    iter = counter.clone();
+                                }
+                                '}' => {
+                                    self.insert_token(i, TokenKind::Empty(comma_count));
+                                    self.insert_closing(ni);
+                                    iter = counter.clone();
+                                    continue 'tokenize;
+                                }
+                                _ => {
+                                    iter = prev_iter;
+                                    break 'commacounter;
+                                }
+                            }
+                            prev_iter = counter.clone();
+                        }
+                        match comma_count > 1 || was_opening {
+                            true => self.insert_token(i, TokenKind::Empty(comma_count)),
+                            _ => {
+                                self.insert_token(i, TokenKind::Comma);
+                            }
+                        }
                         self.state = State::Comma;
-                        self.insert_token(i, TokenKind::Comma);
                     }
                 }
                 (State::Text, _) => self.text_cut.1 += 1,
@@ -454,7 +491,7 @@ mod tests {
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
-        expected_map.insert(2, TokenKind::Comma);
+        expected_map.insert(2, TokenKind::Empty(1));
         expected_map.insert(3, TokenKind::Text(1));
         expected_map.insert(4, TokenKind::Comma);
         expected_map.insert(5, TokenKind::Text(1));
@@ -471,8 +508,7 @@ mod tests {
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
         expected_map.insert(2, TokenKind::Text(1));
-        expected_map.insert(3, TokenKind::Comma);
-        expected_map.insert(4, TokenKind::Comma);
+        expected_map.insert(3, TokenKind::Empty(2));
         expected_map.insert(5, TokenKind::Text(1));
         expected_map.insert(6, TokenKind::ClosingBracket);
         expected_map.insert(7, TokenKind::Text(1));
@@ -489,7 +525,7 @@ mod tests {
         expected_map.insert(2, TokenKind::Text(1));
         expected_map.insert(3, TokenKind::Comma);
         expected_map.insert(4, TokenKind::Text(1));
-        expected_map.insert(5, TokenKind::Comma);
+        expected_map.insert(5, TokenKind::Empty(1));
         expected_map.insert(6, TokenKind::ClosingBracket);
         expected_map.insert(7, TokenKind::Text(1));
         assert_eq!(expected_map, tokenizer.tokens)
