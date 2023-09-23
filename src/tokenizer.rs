@@ -162,7 +162,6 @@ impl<'a> Tokenizer<'a> {
                 (_, '0'..='9') => 
                 self.number_start(i),
                 (old_state, '.') => {
-                    let mut skip = false;
                     match old_state {
                         // Range without starting limit. Defaults to zero.
                         State::None |
@@ -175,7 +174,7 @@ impl<'a> Tokenizer<'a> {
                                         self.insert_token(i, TokenKind::Range);
                                         iter = check;
                                         self.state = State::None;
-                                        skip = true;
+                                        continue;
                                     }
                                     // support for floats?
                                     // '0'..='9' => todo!(),
@@ -193,9 +192,7 @@ impl<'a> Tokenizer<'a> {
                         State::Closing => (),
                         State::Escape => unreachable!(),
                     }
-                    if !skip {
-                        self.text_start(i);
-                    }
+                    self.text_start(i);
                 }
                 (old_state, '{') => {
                     match old_state {
