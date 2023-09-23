@@ -258,6 +258,22 @@ mod tests {
     }
 
     #[test]
+    fn test_escape_misuse() {
+        let mut tokenizer = Tokenizer::new("\\").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NothingToEscape));
+        let mut tokenizer = Tokenizer::new(" \\").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NothingToEscape));
+    }
+
+    #[test]
+    fn test_no_braces_used() {
+        let mut tokenizer = Tokenizer::new("10801920").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NoBraces));
+        let mut tokenizer = Tokenizer::new("Salut!\\, mon ami!").unwrap();
+        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NoBraces));
+    }
+
+    #[test]
     fn test_empty_braces_returns_empty_braces() {
         let mut tokenizer = Tokenizer::new("{}").unwrap();
         assert_eq!(tokenizer.tokenize(), Err(TokenizationError::EmptyBraces));
@@ -293,22 +309,26 @@ mod tests {
 
     #[test]
     fn test_simple_number() {
-        let mut tokenizer = Tokenizer::new("10801920").unwrap();
+        let mut tokenizer = Tokenizer::new("{10801920}").unwrap();
         assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
-        expected_map.insert(0, TokenKind::Number(8));
+        expected_map.insert(0, TokenKind::OpeningBracket);
+        expected_map.insert(1, TokenKind::Number(8));
+        expected_map.insert(9, TokenKind::ClosingBracket);
         assert_eq!(expected_map, tokens)
     }
 
     #[test]
     fn test_simple_text() {
-        let mut tokenizer = Tokenizer::new("Salut\\, mon ami!").unwrap();
+        let mut tokenizer = Tokenizer::new("{Salut\\, mon ami!}").unwrap();
         assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
-        expected_map.insert(0, TokenKind::Text(5));
-        expected_map.insert(6, TokenKind::Text(10));
+        expected_map.insert(0, TokenKind::OpeningBracket);
+        expected_map.insert(1, TokenKind::Text(5));
+        expected_map.insert(7, TokenKind::Text(10));
+        expected_map.insert(17, TokenKind::ClosingBracket);
         assert_eq!(expected_map, tokens)
     }
 
