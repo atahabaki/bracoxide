@@ -6,8 +6,6 @@
  * Copyright (c) 2023 A. Taha Baki <atahabaki@pm.me>
  */
 
-use std::collections::HashMap;
-
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub enum TokenKind {
@@ -20,6 +18,8 @@ pub enum TokenKind {
     Number(usize),
     Range,
 }
+
+pub type TokenMap = std::collections::HashMap<usize, TokenKind>;
 
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -84,7 +84,7 @@ pub struct Tokenizer<'a> {
     /// Counts of opening and closing bracket.
     count: Cut,
     /// token beginning position -> TokenKind
-    pub tokens: HashMap<usize, TokenKind>,
+    pub tokens: TokenMap,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -94,7 +94,7 @@ impl<'a> Tokenizer<'a> {
         }
         Ok(Tokenizer {
             content,
-            tokens: HashMap::new(),
+            tokens: TokenMap::new(),
             text_cut: (0,0),
             number_cut: (0,0),
             count: (0,0),
