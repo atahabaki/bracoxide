@@ -19,6 +19,35 @@ pub enum TokenKind {
     Range,
 }
 
+impl TokenKind {
+    pub fn get_length(&self) -> usize {
+        match self {
+            TokenKind::OpeningBracket |
+            TokenKind::ClosingBracket |
+            TokenKind::Comma => 1,
+            TokenKind::Number(l) |
+            TokenKind::Text(l) => *l,
+            TokenKind::Range => 2,
+        }
+    }
+    pub fn next_position(&self, current: usize) -> usize {
+        current + self.get_length()
+    }
+}
+
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::OpeningBracket => write!(f, "Opening"),
+            TokenKind::ClosingBracket => write!(f, "Closing"),
+            TokenKind::Comma => write!(f, "Comma"),
+            TokenKind::Text(l) => write!(f, "Text, len: {}", l),
+            TokenKind::Number(l) => write!(f, "Number, len: {}", l),
+            TokenKind::Range => write!(f, "Range"),
+        }
+    }
+}
+
 pub type TokenMap = std::collections::HashMap<usize, TokenKind>;
 
 #[derive(PartialEq)]
