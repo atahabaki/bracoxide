@@ -47,7 +47,7 @@ impl std::fmt::Display for TokenKind {
 
 pub type TokenMap = std::collections::HashMap<usize, TokenKind>;
 
-#[derive(PartialEq)]
+#[derive(Default, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 enum State {
     Escape,
@@ -56,13 +56,8 @@ enum State {
     Closing,
     Text,
     Number,
+    #[default]
     None,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::None
-    }
 }
 
 /// Position start and length.
