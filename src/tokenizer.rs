@@ -161,7 +161,6 @@ impl<'a> Tokenizer<'a> {
                             self.tokenize_number();
                             let mut check = iter.clone();
                             if let Some((ni, nc)) = check.next() {
-                                println!("{ni}: {nc}");
                                 match nc {
                                     '.' => {
                                         self.insert_token(i, TokenKind::Range);
@@ -343,8 +342,58 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_expansion() {
+    fn test_annoying_dots1() {
+        let mut tokenizer = Tokenizer::new("{1.2.3,b}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::OpeningBracket);
+        expected_map.insert(1, TokenKind::Number(1));
+        expected_map.insert(2, TokenKind::Text(1));
+        expected_map.insert(3, TokenKind::Number(1));
+        expected_map.insert(4, TokenKind::Text(1));
+        expected_map.insert(5, TokenKind::Number(1));
+        expected_map.insert(6, TokenKind::Comma);
+        expected_map.insert(7, TokenKind::Text(1));
+        expected_map.insert(8, TokenKind::ClosingBracket);
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
 
+    #[test]
+    fn test_annoying_dots2() {
+        let mut tokenizer = Tokenizer::new("{a.b.c,d}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::OpeningBracket);
+        expected_map.insert(1, TokenKind::Text(5));
+        expected_map.insert(6, TokenKind::Comma);
+        expected_map.insert(7, TokenKind::Text(1));
+        expected_map.insert(8, TokenKind::ClosingBracket);
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
+
+    #[test]
+    fn test_annoying_dots3() {
+        let mut tokenizer = Tokenizer::new("{a.1.c.2.d,3.e.4,f}").unwrap();
+        assert_eq!(tokenizer.tokenize(), Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::OpeningBracket);
+        expected_map.insert(1, TokenKind::Text(2));
+        expected_map.insert(3, TokenKind::Number(1));
+        expected_map.insert(4, TokenKind::Text(3));
+        expected_map.insert(7, TokenKind::Number(1));
+        expected_map.insert(8, TokenKind::Text(2));
+        expected_map.insert(10, TokenKind::Comma);
+        expected_map.insert(11, TokenKind::Number(1));
+        expected_map.insert(12, TokenKind::Text(3));
+        expected_map.insert(15, TokenKind::Number(1));
+        expected_map.insert(16, TokenKind::Comma);
+        expected_map.insert(17, TokenKind::Text(1));
+        expected_map.insert(18, TokenKind::ClosingBracket);
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
+
+    #[test]
+    fn test_simple_expansion() {
         let mut tokenizer = Tokenizer::new("A{B,C}D{13..25}").unwrap();
         assert_eq!(tokenizer.tokenize(),  Ok(()));
         let tokens = tokenizer.tokens;
