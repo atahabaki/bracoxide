@@ -22,11 +22,8 @@ pub enum TokenKind {
 impl TokenKind {
     pub fn get_length(&self) -> usize {
         match self {
-            TokenKind::OpeningBracket |
-            TokenKind::ClosingBracket |
-            TokenKind::Comma => 1,
-            TokenKind::Number(l) |
-            TokenKind::Text(l) => *l,
+            TokenKind::OpeningBracket | TokenKind::ClosingBracket | TokenKind::Comma => 1,
+            TokenKind::Number(l) | TokenKind::Text(l) => *l,
             TokenKind::Range => 2,
         }
     }
@@ -89,7 +86,7 @@ pub enum TokenizationError {
     EmptyBraces,
     BracesDontMatch,
     NoBraces,
-    NothingToEscape
+    NothingToEscape,
 }
 
 impl std::fmt::Display for TokenizationError {
@@ -104,7 +101,10 @@ impl std::fmt::Display for TokenizationError {
                 write!(f, "Opening and closing brackets' count does not match.")
             }
             TokenizationError::NoBraces => write!(f, "Not a single brace found."),
-            TokenizationError::NothingToEscape => write!(f, "Escape character ('\\') used but there's nothing to escape."),
+            TokenizationError::NothingToEscape => write!(
+                f,
+                "Escape character ('\\') used but there's nothing to escape."
+            ),
         }
     }
 }
@@ -178,6 +178,9 @@ impl<'a> Tokenizer<'a> {
         self.state = State::Closing;
         self.insert_token(position, TokenKind::ClosingBracket);
     }
+    pub fn get_content(&self) -> &'a str {
+        self.content
+    }
     pub fn tokenize(&mut self) -> Result<(), TokenizationError> {
         let mut iter = self.content.chars().enumerate();
         while let Some((i, c)) = iter.next() {
@@ -236,7 +239,7 @@ impl<'a> Tokenizer<'a> {
         if self.state == State::Escape {
             return Err(TokenizationError::NothingToEscape);
         }
-        if self.count == (0,0) {
+        if self.count == (0, 0) {
             return Err(TokenizationError::NoBraces);
         }
         if self.count.0 != self.count.1 {
@@ -260,9 +263,15 @@ mod tests {
     #[test]
     fn test_escape_misuse() {
         let mut tokenizer = Tokenizer::new("\\").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NothingToEscape));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::NothingToEscape)
+        );
         let mut tokenizer = Tokenizer::new(" \\").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::NothingToEscape));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::NothingToEscape)
+        );
     }
 
     #[test]
