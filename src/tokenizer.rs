@@ -219,9 +219,20 @@ impl<'a> Tokenizer<'a> {
                     self.insert_closing(i);
                 }
                 (_, ',') => {
-                    self.tokenize_buffers();
-                    self.state = State::Comma;
-                    self.insert_token(i, TokenKind::Comma);
+                    if self.count.0 == 0 || self.count.0 == self.count.1 {
+                        // w- escaping: `{A,B,C},D` -> [`A,D`, `B,D`, `C,D`]
+                        // w/ escaping: `{A,B,C}\,D` -> [`A,D`, `B,D`, `C,D`]
+                        if self.text_cut.1 >= 1 {
+                            self.text_cut.1 += 1;
+                        } else {
+                            self.tokenize_buffers();
+                            self.text_start(i);
+                        }
+                    } else {
+                        self.tokenize_buffers();
+                        self.state = State::Comma;
+                        self.insert_token(i, TokenKind::Comma);
+                    }
                 }
                 (State::Text, _) => self.text_cut.1 += 1,
                 (_, _) => {
