@@ -55,11 +55,25 @@ impl StartPosition<usize> for Cut {
 
 #[derive(PartialEq)]
 #[cfg_attr(test,derive(Debug))]
+#[cfg_attr(feature="simplerr", derive(Debug))]
 pub enum TokenizationError {
     NoContent,
     EmptyBraces,
     BracesDontMatch
 }
+
+impl std::fmt::Display for TokenizationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenizationError::NoContent => write!(f, "No content to tokenize from."),
+            TokenizationError::EmptyBraces => write!(f, "Empty braces increases loop count. Remove empty braces ('{{}}')."),
+            TokenizationError::BracesDontMatch => write!(f, "Opening and closing brackets' count does not match."),
+        }
+    }
+}
+
+#[cfg(feature = "simplerr")]
+impl std::error::Error for TokenizationError {}
 
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -160,7 +174,7 @@ impl<'a> Tokenizer<'a> {
                         State::Number => {
                             self.tokenize_number();
                             let mut check = iter.clone();
-                            if let Some((ni, nc)) = check.next() {
+                            if let Some((_ni, nc)) = check.next() {
                                 match nc {
                                     '.' => {
                                         self.insert_token(i, TokenKind::Range);
