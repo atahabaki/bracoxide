@@ -426,4 +426,51 @@ mod tests {
         expected_map.insert(14, TokenKind::ClosingBracket);
         assert_eq!(expected_map, tokens)
     }
+
+    #[test]
+    fn test_empty_start() {
+        let mut tokenizer = Tokenizer::new("A{,B,C}D").unwrap();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::Text(1));
+        expected_map.insert(1, TokenKind::OpeningBracket);
+        expected_map.insert(2, TokenKind::Empty);
+        expected_map.insert(3, TokenKind::Text(1));
+        expected_map.insert(4, TokenKind::Comma);
+        expected_map.insert(5, TokenKind::Text(1));
+        expected_map.insert(6, TokenKind::ClosingBracket);
+        expected_map.insert(7, TokenKind::Text(1));
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
+
+    #[test]
+    fn test_empty_middle() {
+        let mut tokenizer = Tokenizer::new("A{B,,C}D").unwrap();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::Text(1));
+        expected_map.insert(1, TokenKind::OpeningBracket);
+        expected_map.insert(2, TokenKind::Text(1));
+        expected_map.insert(4, TokenKind::Empty);
+        expected_map.insert(5, TokenKind::Text(1));
+        expected_map.insert(6, TokenKind::ClosingBracket);
+        expected_map.insert(7, TokenKind::Text(1));
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
+
+    #[test]
+    fn test_empty_end() {
+        let mut tokenizer = Tokenizer::new("A{B,C,}D").unwrap();
+        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        let mut expected_map = HashMap::<usize, TokenKind>::new();
+        expected_map.insert(0, TokenKind::Text(1));
+        expected_map.insert(1, TokenKind::OpeningBracket);
+        expected_map.insert(2, TokenKind::Text(1));
+        expected_map.insert(3, TokenKind::Comma);
+        expected_map.insert(4, TokenKind::Text(1));
+        expected_map.insert(5, TokenKind::Empty);
+        expected_map.insert(6, TokenKind::ClosingBracket);
+        expected_map.insert(7, TokenKind::Text(1));
+        assert_eq!(expected_map, tokenizer.tokens)
+    }
 }
