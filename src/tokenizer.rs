@@ -53,20 +53,25 @@ impl StartPosition<usize> for Cut {
 }
 
 #[derive(PartialEq)]
-#[cfg_attr(test,derive(Debug))]
-#[cfg_attr(feature="simplerr", derive(Debug))]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum TokenizationError {
     NoContent,
     EmptyBraces,
-    BracesDontMatch
+    BracesDontMatch,
 }
 
 impl std::fmt::Display for TokenizationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenizationError::NoContent => write!(f, "No content to tokenize from."),
-            TokenizationError::EmptyBraces => write!(f, "Empty braces increases loop count. Remove empty braces ('{{}}')."),
-            TokenizationError::BracesDontMatch => write!(f, "Opening and closing brackets' count does not match."),
+            TokenizationError::EmptyBraces => write!(
+                f,
+                "Empty braces increases loop count. Remove empty braces ('{{}}')."
+            ),
+            TokenizationError::BracesDontMatch => {
+                write!(f, "Opening and closing brackets' count does not match.")
+            }
         }
     }
 }
@@ -95,10 +100,10 @@ impl<'a> Tokenizer<'a> {
         Ok(Tokenizer {
             content,
             tokens: TokenMap::new(),
-            text_cut: (0,0),
-            number_cut: (0,0),
-            count: (0,0),
-            state: State::default()
+            text_cut: (0, 0),
+            number_cut: (0, 0),
+            count: (0, 0),
+            state: State::default(),
         })
     }
     fn insert_token(&mut self, position: usize, kind: TokenKind) {
@@ -107,13 +112,13 @@ impl<'a> Tokenizer<'a> {
     fn tokenize_number(&mut self) {
         if self.number_cut.1 > 0 {
             self.insert_token(self.number_cut.0, TokenKind::Number(self.number_cut.1));
-            self.number_cut = (0,0);
+            self.number_cut = (0, 0);
         }
     }
     fn tokenize_text(&mut self) {
         if self.text_cut.1 > 0 {
             self.insert_token(self.text_cut.0, TokenKind::Text(self.text_cut.1));
-            self.text_cut = (0,0);
+            self.text_cut = (0, 0);
         }
     }
     fn tokenize_buffers(&mut self) {
@@ -133,119 +138,63 @@ impl<'a> Tokenizer<'a> {
     fn insert_opening(&mut self, position: usize) {
         self.count.0 += 1;
         self.state = State::Opening;
-        self.insert_token(position, TokenKind::OpeningBracket);        
+        self.insert_token(position, TokenKind::OpeningBracket);
     }
     fn insert_closing(&mut self, position: usize) {
         self.count.1 += 1;
         self.state = State::Closing;
         self.insert_token(position, TokenKind::ClosingBracket);
     }
-    pub fn tokenize(&mut self) -> Result<(), TokenizationError>{
+    pub fn tokenize(&mut self) -> Result<(), TokenizationError> {
         let mut iter = self.content.chars().enumerate();
         while let Some((i, c)) = iter.next() {
             match (&self.state, c) {
                 (State::Escape, _) => self.text_start(i),
-                (old_state, '\\') => {
-                    match old_state {
-                        State::Text => self.tokenize_text(),
-                        State::Number => self.tokenize_number(),
-                        State::Comma |
-                        State::Closing |
-                        State::Opening |
-                        State::None => (),
-                        State::Escape => unreachable!(),
-                    }
+                (_, '\\') => {
+                    self.tokenize_buffers();
                     self.state = State::Escape;
                 }
-
                 (State::Number, '0'..='9') => self.number_cut.1 += 1,
-                (_, '0'..='9') => 
-                self.number_start(i),
-                (old_state, '.') => {
-                    match old_state {
-                        // Range without starting limit. Defaults to zero.
-                        State::None |
-                        State::Number => {
-                            self.tokenize_number();
-                            let mut check = iter.clone();
-                            if let Some((_ni, nc)) = check.next() {
-                                match nc {
-                                    '.' => {
-                                        self.insert_token(i, TokenKind::Range);
-                                        iter = check;
-                                        self.state = State::None;
-                                        continue;
-                                    }
-                                    // support for floats?
-                                    // '0'..='9' => todo!(),
-                                    _ => self.text_start(i),
-                                }
-                            } else {
-                                self.insert_token(i, TokenKind::Text(1));
+                (_, '0'..='9') => self.number_start(i),
+                (State::Text, '.') => self.text_cut.1 += 1,
+                (State::None | State::Number, '.') => {
+                    self.tokenize_number();
+                    let mut check = iter.clone();
+                    if let Some((_, nc)) = check.next() {
+                        match nc {
+                            '.' => {
+                                self.insert_token(i, TokenKind::Range);
+                                iter = check;
+                                self.state = State::None;
+                                continue;
                             }
-                        },
-                        // continue text...
-                        State::Text => {self.text_cut.1+=1; continue;}
-                        // it is definitelly not a Range, so count as text.
-                        State::Comma |
-                        State::Opening |
-                        State::Closing => (),
-                        State::Escape => unreachable!(),
+                            // support for floats?
+                            // '0'..='9' => todo!(),
+                            _ => self.text_start(i),
+                        }
+                    } else {
+                        self.insert_token(i, TokenKind::Text(1));
                     }
-                    self.text_start(i);
                 }
-                (old_state, '{') => {
-                    match old_state {
-                        State::Text => self.tokenize_text(),
-                        State::Number => self.tokenize_number(),
-                        State::Opening |
-                        State::Closing |
-                        State::Comma |
-                        State::None => (),
-                        State::Escape => unreachable!(),
-                    }
+                (_, '.') => self.text_start(i),
+                (_, '{') => {
+                    self.tokenize_buffers();
                     self.insert_opening(i);
                 }
-                (old_state, '}') => {
-                    match old_state {
-                        // Return error:
-                        // Case: {}, completely empty braces.
-                        State::Opening => return Err(TokenizationError::EmptyBraces),
-                        State::Text => self.tokenize_text(),
-                        State::Number => self.tokenize_number(),
-                        State::Comma |
-                        State::Closing |
-                        State::None => (),
-                        State::Escape => unreachable!(),
-                    }
+
+                (State::Opening, '}') => return Err(TokenizationError::EmptyBraces),
+                (_, '}') => {
+                    self.tokenize_buffers();
                     self.insert_closing(i);
                 }
-                (old_state, ',') => {
-                    match old_state {
-                        State::Text => self.tokenize_text(),
-                        State::Number => self.tokenize_number(),
-                        State::Comma |
-                        State::Closing |
-                        State::Opening |
-                        State::None => (),
-                        State::Escape => unreachable!(),
-                    }
+                (_, ',') => {
+                    self.tokenize_buffers();
                     self.state = State::Comma;
                     self.insert_token(i, TokenKind::Comma);
                 }
-                (old_state,_) => {
-                    match old_state {
-                        State::Number => self.tokenize_number(),
-                        State::Text => {
-                            self.text_cut.1 += 1;
-                            continue;
-                        }
-                        State::Comma => self.tokenize_text(),
-                        State::Opening |
-                        State::Closing |
-                        State::None => (),
-                        State::Escape => unreachable!(),
-                    }
+                (State::Text, _) => self.text_cut.1 += 1,
+                (_, _) => {
+                    self.tokenize_buffers();
                     self.text_start(i);
                 }
             }
@@ -282,19 +231,31 @@ mod tests {
     #[test]
     fn test_braces_dont_match() {
         let mut tokenizer = Tokenizer::new("{").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::BracesDontMatch)
+        );
         let mut tokenizer = Tokenizer::new("}").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::BracesDontMatch)
+        );
         let mut tokenizer = Tokenizer::new("{A}}").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::BracesDontMatch)
+        );
         let mut tokenizer = Tokenizer::new("{{A}").unwrap();
-        assert_eq!(tokenizer.tokenize(), Err(TokenizationError::BracesDontMatch));
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizationError::BracesDontMatch)
+        );
     }
 
     #[test]
     fn test_simple_number() {
         let mut tokenizer = Tokenizer::new("10801920").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Number(8));
@@ -304,7 +265,7 @@ mod tests {
     #[test]
     fn test_simple_text() {
         let mut tokenizer = Tokenizer::new("Salut\\, mon ami!").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(5));
@@ -315,7 +276,7 @@ mod tests {
     #[test]
     fn test_simple_collection() {
         let mut tokenizer = Tokenizer::new("{A,B}").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::OpeningBracket);
@@ -329,7 +290,7 @@ mod tests {
     #[test]
     fn test_simple_range() {
         let mut tokenizer = Tokenizer::new("{3..5}").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::OpeningBracket);
@@ -394,7 +355,7 @@ mod tests {
     #[test]
     fn test_simple_expansion() {
         let mut tokenizer = Tokenizer::new("A{B,C}D{13..25}").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let tokens = tokenizer.tokens;
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
@@ -415,7 +376,7 @@ mod tests {
     #[test]
     fn test_empty_start() {
         let mut tokenizer = Tokenizer::new("A{,B,C}D").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
@@ -431,7 +392,7 @@ mod tests {
     #[test]
     fn test_empty_middle() {
         let mut tokenizer = Tokenizer::new("A{B,,C}D").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
@@ -447,7 +408,7 @@ mod tests {
     #[test]
     fn test_empty_end() {
         let mut tokenizer = Tokenizer::new("A{B,C,}D").unwrap();
-        assert_eq!(tokenizer.tokenize(),  Ok(()));
+        assert_eq!(tokenizer.tokenize(), Ok(()));
         let mut expected_map = HashMap::<usize, TokenKind>::new();
         expected_map.insert(0, TokenKind::Text(1));
         expected_map.insert(1, TokenKind::OpeningBracket);
