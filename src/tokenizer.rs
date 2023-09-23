@@ -88,6 +88,8 @@ pub enum TokenizationError {
     NoContent,
     EmptyBraces,
     BracesDontMatch,
+    NoBraces,
+    NothingToEscape
 }
 
 impl std::fmt::Display for TokenizationError {
@@ -101,6 +103,8 @@ impl std::fmt::Display for TokenizationError {
             TokenizationError::BracesDontMatch => {
                 write!(f, "Opening and closing brackets' count does not match.")
             }
+            TokenizationError::NoBraces => write!(f, "Not a single brace found."),
+            TokenizationError::NothingToEscape => write!(f, "Escape character ('\\') used but there's nothing to escape."),
         }
     }
 }
@@ -229,6 +233,12 @@ impl<'a> Tokenizer<'a> {
             }
         }
         self.tokenize_buffers();
+        if self.state == State::Escape {
+            return Err(TokenizationError::NothingToEscape);
+        }
+        if self.count == (0,0) {
+            return Err(TokenizationError::NoBraces);
+        }
         if self.count.0 != self.count.1 {
             return Err(TokenizationError::BracesDontMatch);
         }
