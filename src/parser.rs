@@ -27,10 +27,47 @@ pub enum ParsingError {
     NothingInBraces(usize),
 }
 
+impl std::fmt::Display for ParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsingError::NoContent => write!(f, "Content is empty."),
+            ParsingError::NoTokens => write!(f, "Token list is empty."),
+            ParsingError::NoFragment => write!(f, "Fragment is empty."),
+            ParsingError::ExtraOpeningBracket(x) => {
+                write!(f, "Opening bracket was not expected at {x}.")
+            }
+            ParsingError::ExtraClosingBracket(x) => {
+                write!(f, "Closing bracket was not expected at {x}.")
+            }
+            ParsingError::OpeningBracketExpected(x) => {
+                write!(f, "Opening bracket expected at {x}.")
+            }
+            ParsingError::NoCommaInRange(x) => {
+                write!(f, "Comma is not allowed in Range syntax at {x}")
+            }
+            ParsingError::NoTextInRange(x) => {
+                write!(f, "Texts is not allowed in Range syntax at {x}")
+            }
+            ParsingError::ExtraRange(x) => {
+                write!(f, "Extra Range token is not allowed in Range syntax at {x}")
+            }
+            ParsingError::ExpectedText(x) => write!(f, "Expected text but found none at {x}."),
+            ParsingError::StartLimitExpected(x) => {
+                write!(f, "Start limit expected for Range at {x}.")
+            }
+            ParsingError::EndLimitExpected(x) => write!(f, "End limit expected for Range at {x}"),
+            ParsingError::NothingInBraces(x) => write!(f, "Nothing inside braces at {x}"),
+        }
+    }
+}
+
+#[cfg(feature = "simplerr")]
+impl std::error::Error for ParsingError {}
+
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 #[cfg_attr(feature = "simplerr", derive(Debug))]
-pub enum Node {
+pub(crate) enum Node {
     Text {
         content: String,
         #[cfg(test)]
@@ -64,7 +101,7 @@ pub enum Node {
     },
 }
 
-pub struct Parser<'a> {
+pub(crate) struct Parser<'a> {
     _content: &'a str,
     tokens: TokenMap,
 }
@@ -73,7 +110,7 @@ pub(crate) type _Fragment = Vec<usize>;
 pub(crate) type _Fragments = (Option<_Fragment>, Option<_Fragment>, Option<_Fragment>);
 
 impl<'a> Parser<'a> {
-    pub fn from_tokenizer(tokenizer: Tokenizer<'a>) -> Result<Self, ParsingError> {
+    pub(crate) fn from_tokenizer(tokenizer: Tokenizer<'a>) -> Result<Self, ParsingError> {
         if tokenizer.tokens.is_empty() {
             return Err(ParsingError::NoTokens);
         }
@@ -83,7 +120,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn new(content: &'a str, tokens: TokenMap) -> Result<Self, ParsingError> {
+    pub(crate) fn _new(content: &'a str, tokens: TokenMap) -> Result<Self, ParsingError> {
         if content.is_empty() {
             return Err(ParsingError::NoContent);
         }
@@ -104,7 +141,7 @@ impl<'a> Parser<'a> {
             .collect()
     }
 
-    pub fn parse(&self) -> Result<Node, ParsingError> {
+    pub(crate) fn parse(&self) -> Result<Node, ParsingError> {
         let mut keys: Vec<usize> = self.tokens.keys().cloned().collect();
         keys.sort();
         self.reparse(&keys)
@@ -158,7 +195,7 @@ impl<'a> Parser<'a> {
                 }
                 #[cfg(test)]
                 if let Some(token_index) = fragment.last() {
-                    pos.1 = *token_index + self.tokens.get(token_index).unwrap().get_length();
+                    pos.1 = *token_index + self.tokens.get(token_index).unwrap()._get_length();
                 }
                 Ok(Node::BraceExpansion {
                     prefix,
@@ -475,7 +512,7 @@ mod tests {
         let mut tokens = TokenMap::new();
         tokens.insert(0, TokenKind::Text(18));
         let fragment = vec![0_usize];
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
             Node::Text {
                 content: "Akşam vakti geldi!".into(),
@@ -492,7 +529,7 @@ mod tests {
         let mut tokens = TokenMap::new();
         tokens.insert(0, TokenKind::Text(5));
         let fragment = vec![0_usize];
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
             Node::Text {
                 content: "Akşam".into(),
@@ -509,7 +546,7 @@ mod tests {
         let mut tokens = TokenMap::new();
         tokens.insert(0, TokenKind::Text(1));
         let fragment = vec![0_usize];
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
             Node::Text {
                 content: "A".into(),
@@ -530,7 +567,7 @@ mod tests {
         tokens.insert(2, TokenKind::Range);
         tokens.insert(4, TokenKind::Number(1));
         tokens.insert(5, TokenKind::ClosingBracket);
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         let fragment = vec![1, 2, 4];
         assert_eq!(
             Node::Range {
@@ -559,7 +596,7 @@ mod tests {
         let mut tokens = TokenMap::new();
         tokens.insert(0, TokenKind::OpeningBracket);
         tokens.insert(1, TokenKind::ClosingBracket);
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         let fragment = vec![0, 1];
         assert_eq!(
             Err(ParsingError::NothingInBraces(0)),
@@ -587,7 +624,7 @@ mod tests {
         tokens.insert(15, TokenKind::Empty(1));
         tokens.insert(16, TokenKind::ClosingBracket);
         let fragment = vec![0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16];
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
             Node::Collection {
                 items: vec![
@@ -672,7 +709,7 @@ mod tests {
         let fragment = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 19, 20, 21, 22, 23,
         ];
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
             Node::Collection {
                 items: vec![
@@ -794,7 +831,7 @@ mod tests {
         tokens.insert(34, TokenKind::Range);
         tokens.insert(36, TokenKind::Number(1));
         tokens.insert(37, TokenKind::ClosingBracket);
-        let parser = Parser::new(content, tokens).unwrap();
+        let parser = Parser::_new(content, tokens).unwrap();
         let _fragment = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 36, 37,

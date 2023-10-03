@@ -8,7 +8,7 @@
 
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
-pub enum TokenKind {
+pub(crate) enum TokenKind {
     OpeningBracket,
     ClosingBracket,
     Comma,
@@ -22,15 +22,12 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    pub fn get_length(&self) -> usize {
+    pub(crate) fn _get_length(&self) -> usize {
         match self {
             TokenKind::Empty(l) | TokenKind::Number(l) | TokenKind::Text(l) => *l,
             TokenKind::Range => 2,
             _ => 1,
         }
-    }
-    pub fn next_position(&self, current: usize) -> usize {
-        current + self.get_length()
     }
 }
 
@@ -48,7 +45,7 @@ impl std::fmt::Display for TokenKind {
     }
 }
 
-pub type TokenMap = std::collections::HashMap<usize, TokenKind>;
+pub(crate) type TokenMap = std::collections::HashMap<usize, TokenKind>;
 
 #[derive(Default, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -112,7 +109,7 @@ impl std::error::Error for TokenizationError {}
 
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
-pub struct Tokenizer<'a> {
+pub(crate) struct Tokenizer<'a> {
     content: &'a str,
     state: State,
     text_cut: Cut,
@@ -120,11 +117,11 @@ pub struct Tokenizer<'a> {
     /// Counts of opening and closing bracket.
     count: Cut,
     /// token beginning position -> TokenKind
-    pub tokens: TokenMap,
+    pub(crate) tokens: TokenMap,
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn new(content: &'a str) -> Result<Self, TokenizationError> {
+    pub(crate) fn new(content: &'a str) -> Result<Self, TokenizationError> {
         if content.is_empty() {
             return Err(TokenizationError::NoContent);
         }
@@ -176,10 +173,10 @@ impl<'a> Tokenizer<'a> {
         self.state = State::Closing;
         self.insert_token(position, TokenKind::ClosingBracket);
     }
-    pub fn get_content(&self) -> &'a str {
+    pub(crate) fn get_content(&self) -> &'a str {
         self.content
     }
-    pub fn tokenize(&mut self) -> Result<(), TokenizationError> {
+    pub(crate) fn tokenize(&mut self) -> Result<(), TokenizationError> {
         let mut iter = self.content.chars().enumerate();
         'tokenize: while let Some((i, c)) = iter.next() {
             match (&self.state, c) {

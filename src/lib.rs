@@ -39,27 +39,11 @@
 //! We hope you find the str expand crate to be a valuable tool in your Rust projects.
 //! Happy string expansion!
 
-pub mod parser;
-pub mod tokenizer;
+pub(crate) mod parser;
+pub(crate) mod tokenizer;
 
 use parser::{Parser, ParsingError};
-use std::collections::HashMap;
-use tokenizer::{TokenKind, TokenizationError, Tokenizer};
-
-pub type TokenList = HashMap<usize, TokenKind>;
-
-trait Railway<P: std::ops::Add<Output = P>> {
-    fn length(&self) -> P;
-    fn next_stop(&self, position: P) -> P {
-        position + self.length()
-    }
-}
-
-impl Railway<usize> for TokenKind {
-    fn length(&self) -> usize {
-        self.get_length()
-    }
-}
+use tokenizer::{TokenizationError, Tokenizer};
 
 /// An error type representing the failure to expand a parsed node.
 ///
@@ -70,7 +54,9 @@ impl Railway<usize> for TokenKind {
 ///
 /// - `NumConversionFailed(String)`: An error indicating that a number conversion failed during expansion.
 ///                                 It contains a string representing the value that failed to be converted.
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum ExpansionError {
     /// Error indicating that a number conversion failed during expansion.
     NumConversionFailed(String),
@@ -86,6 +72,7 @@ impl std::fmt::Display for ExpansionError {
     }
 }
 
+#[cfg(feature = "simplerr")]
 impl std::error::Error for ExpansionError {}
 
 /// Expands the given parsed node into a vector of strings representing the expanded values.
@@ -111,7 +98,7 @@ impl std::error::Error for ExpansionError {}
 /// # Safety
 ///
 /// This function operates on valid parsed nodes and does not use unsafe code internally.
-pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
+pub(crate) fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
     match node {
         parser::Node::Text {
             content,
@@ -201,8 +188,10 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
 /// Error types (except the [OxidizationError]) implements [std::error::Error] trait. Why not get all the benefits from it?
 #[cfg(feature = "simplerr")]
 pub fn explode(content: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let tokens = tokenizer::tokenize(content)?;
-    let ast = parser::parse(&tokens)?;
+    let mut tokenizer = Tokenizer::new(content)?;
+    tokenizer.tokenize()?;
+    let parser = Parser::from_tokenizer(tokenizer)?;
+    let ast = parser.parse()?;
     let expansions = expand(&ast)?;
     Ok(expansions)
 }
