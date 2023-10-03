@@ -466,6 +466,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -750,6 +751,184 @@ mod tests {
                 end: 23
             },
             parser.collection(&fragment).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_complex() {
+        let content = "A{B,C}D{E,F{G,H}J,K{L,M}N{3..5}}{6..8}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::Text(1));
+        tokens.insert(1, TokenKind::OpeningBracket);
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Comma);
+        tokens.insert(4, TokenKind::Text(1));
+        tokens.insert(5, TokenKind::ClosingBracket);
+        tokens.insert(6, TokenKind::Text(1));
+        tokens.insert(7, TokenKind::OpeningBracket);
+        tokens.insert(8, TokenKind::Text(1));
+        tokens.insert(9, TokenKind::Comma);
+        tokens.insert(10, TokenKind::Text(1));
+        tokens.insert(11, TokenKind::OpeningBracket);
+        tokens.insert(12, TokenKind::Text(1));
+        tokens.insert(13, TokenKind::Comma);
+        tokens.insert(14, TokenKind::Text(1));
+        tokens.insert(15, TokenKind::ClosingBracket);
+        tokens.insert(16, TokenKind::Text(1));
+        tokens.insert(17, TokenKind::Comma);
+        tokens.insert(18, TokenKind::Text(1));
+        tokens.insert(19, TokenKind::OpeningBracket);
+        tokens.insert(20, TokenKind::Text(1));
+        tokens.insert(21, TokenKind::Comma);
+        tokens.insert(22, TokenKind::Text(1));
+        tokens.insert(23, TokenKind::ClosingBracket);
+        tokens.insert(24, TokenKind::Text(1));
+        tokens.insert(25, TokenKind::OpeningBracket);
+        tokens.insert(26, TokenKind::Number(1));
+        tokens.insert(27, TokenKind::Range);
+        tokens.insert(29, TokenKind::Number(1));
+        tokens.insert(30, TokenKind::ClosingBracket);
+        tokens.insert(31, TokenKind::ClosingBracket);
+        tokens.insert(32, TokenKind::OpeningBracket);
+        tokens.insert(33, TokenKind::Number(1));
+        tokens.insert(34, TokenKind::Range);
+        tokens.insert(36, TokenKind::Number(1));
+        tokens.insert(37, TokenKind::ClosingBracket);
+        let parser = Parser::new(content, tokens).unwrap();
+        let fragment = vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 36, 37,
+        ];
+        assert_eq!(
+            Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    content: "A".into(),
+                    start: 0,
+                    end: 1
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            content: "B".into(),
+                            start: 2,
+                            end: 3
+                        },
+                        Node::Text {
+                            content: "C".into(),
+                            start: 4,
+                            end: 5
+                        },
+                    ],
+                    start: 1,
+                    end: 5
+                })),
+                postfix: Some(Box::new(Node::BraceExpansion {
+                    prefix: Some(Box::new(Node::Text {
+                        content: "D".into(),
+                        start: 6,
+                        end: 7
+                    })),
+                    inside: Some(Box::new(Node::Collection {
+                        items: vec![
+                            Node::Text {
+                                content: "E".into(),
+                                start: 8,
+                                end: 9
+                            },
+                            Node::BraceExpansion {
+                                prefix: Some(Box::new(Node::Text {
+                                    content: "F".into(),
+                                    start: 10,
+                                    end: 11
+                                })),
+                                inside: Some(Box::new(Node::Collection {
+                                    items: vec![
+                                        Node::Text {
+                                            content: "G".into(),
+                                            start: 12,
+                                            end: 13
+                                        },
+                                        Node::Text {
+                                            content: "H".into(),
+                                            start: 14,
+                                            end: 15
+                                        },
+                                    ],
+                                    start: 11,
+                                    end: 15
+                                })),
+                                postfix: Some(Box::new(Node::Text {
+                                    content: "J".into(),
+                                    start: 16,
+                                    end: 17
+                                })),
+                                start: 10,
+                                end: 17
+                            },
+                            Node::BraceExpansion {
+                                prefix: Some(Box::new(Node::Text {
+                                    content: "K".into(),
+                                    start: 18,
+                                    end: 19
+                                })),
+                                inside: Some(Box::new(Node::Collection {
+                                    items: vec![
+                                        Node::Text {
+                                            content: "L".into(),
+                                            start: 20,
+                                            end: 21
+                                        },
+                                        Node::Text {
+                                            content: "M".into(),
+                                            start: 22,
+                                            end: 23
+                                        },
+                                    ],
+                                    start: 19,
+                                    end: 23
+                                })),
+                                postfix: Some(Box::new(Node::BraceExpansion {
+                                    prefix: Some(Box::new(Node::Text {
+                                        content: "N".into(),
+                                        start: 24,
+                                        end: 25
+                                    })),
+                                    inside: Some(Box::new(Node::Range {
+                                        from: 3.to_string(),
+                                        to: 5.to_string(),
+                                        start: 26,
+                                        end: 30
+                                    })),
+                                    postfix: None,
+                                    start: 24,
+                                    end: 31
+                                })),
+                                start: 18,
+                                end: 31
+                            }
+                        ],
+                        start: 7,
+                        end: 31
+                    })),
+                    postfix: Some(Box::new(Node::BraceExpansion {
+                        prefix: None,
+                        inside: Some(Box::new(Node::Range {
+                            from: 6.to_string(),
+                            to: 8.to_string(),
+                            start: 33,
+                            end: 37
+                        })),
+                        postfix: None,
+                        start: 32,
+                        end: 38
+                    })),
+                    start: 6,
+                    end: 38
+                })),
+                start: 0,
+                end: 38
+            },
+            parser.parse().unwrap()
         )
     }
 }
