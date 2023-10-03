@@ -29,6 +29,7 @@ pub enum ParsingError {
 
 #[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum Node {
     Text {
         content: String,
@@ -218,7 +219,7 @@ impl<'a> Parser<'a> {
                             WalkState::_Postfix => postfix.push(*token_index),
                         }
                     }
-                    TokenKind::Comma | TokenKind::Range => {
+                    TokenKind::Comma | TokenKind::Range if bracing_state == WalkState::_Prefix => {
                         return Err(ParsingError::OpeningBracketExpected(*token_index))
                     }
                     _ => match bracing_state {
@@ -266,12 +267,12 @@ impl<'a> Parser<'a> {
                         self.get_a_slice_of_cake(*token_index, *token_index + l)
                             .as_str(),
                     ),
+                    TokenKind::Empty(_) => content.push_str(""),
                     _ => return Err(ParsingError::ExpectedText(*token_index)),
                 }
             }
         }
         let _len = content.chars().count();
-        println!("{}", _len);
         Ok(Node::Text {
             content,
             #[cfg(test)]
@@ -293,7 +294,10 @@ impl<'a> Parser<'a> {
             if let Some(token) = self.tokens.get(token_index) {
                 match token {
                     TokenKind::Empty(_) if count.0 == (count.1 + 1) => {
-                        // inside the parantheses
+                        if !current.is_empty() {
+                            collections.push(current.clone());
+                            current.clear();
+                        }
                         current.push(*token_index);
                         collections.push(current.clone());
                         current.clear();
@@ -417,27 +421,31 @@ impl<'a> Parser<'a> {
                                 );
                             }
                             State::Range => {
-                                if start {
-                                    return Err(ParsingError::StartLimitExpected(*token_index));
-                                }
                                 state = State::Second;
-                                pos.1 = *token_index + 1;
+                                limits.1.push_str(
+                                    self.get_a_slice_of_cake(*token_index, *token_index + l)
+                                        .as_str(),
+                                );
+                                pos.1 = *token_index + l;
                             }
                             State::Second => {
                                 limits.1.push_str(
                                     self.get_a_slice_of_cake(*token_index, *token_index + l)
                                         .as_str(),
                                 );
+                                pos.1 = *token_index + l;
                             }
                         }
                     }
                     TokenKind::Range => match state {
                         State::First => {
+                            if start {
+                                return Err(ParsingError::StartLimitExpected(*token_index));
+                            }
                             state = State::Range;
+                            pos.1 = *token_index + 2;
                         }
-                        State::Second | State::Range => {
-                            return Err(ParsingError::ExtraRange(*token_index))
-                        }
+                        _ => return Err(ParsingError::ExtraRange(*token_index)),
                     },
                 }
             }
@@ -510,5 +518,238 @@ mod tests {
             },
             parser.text(&fragment).unwrap()
         );
+    }
+
+    #[test]
+    fn test_simple_range() {
+        let content = "{3..5}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Number(1));
+        tokens.insert(2, TokenKind::Range);
+        tokens.insert(4, TokenKind::Number(1));
+        tokens.insert(5, TokenKind::ClosingBracket);
+        let parser = Parser::new(content, tokens).unwrap();
+        let fragment = vec![1, 2, 4];
+        assert_eq!(
+            Node::Range {
+                from: 3.to_string(),
+                to: 5.to_string(),
+                start: 1,
+                end: 5
+            },
+            parser.range(&fragment).unwrap()
+        );
+        let fragment = vec![1, 2];
+        assert_eq!(
+            Err(ParsingError::EndLimitExpected(4)),
+            parser.range(&fragment)
+        );
+        let fragment = vec![2];
+        assert_eq!(
+            Err(ParsingError::StartLimitExpected(2)),
+            parser.range(&fragment)
+        );
+    }
+
+    #[test]
+    fn test_empty_collection() {
+        let content = "{}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::ClosingBracket);
+        let parser = Parser::new(content, tokens).unwrap();
+        let fragment = vec![0, 1];
+        assert_eq!(
+            Err(ParsingError::NothingInBraces(0)),
+            parser.collection(&fragment)
+        )
+    }
+
+    #[test]
+    fn test_simple_collection() {
+        let content = "{,A,,B,C,1,3,13,}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Empty(1));
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Empty(2));
+        tokens.insert(5, TokenKind::Text(1));
+        tokens.insert(6, TokenKind::Comma);
+        tokens.insert(7, TokenKind::Text(1));
+        tokens.insert(8, TokenKind::Comma);
+        tokens.insert(9, TokenKind::Number(1));
+        tokens.insert(10, TokenKind::Comma);
+        tokens.insert(11, TokenKind::Number(1));
+        tokens.insert(12, TokenKind::Comma);
+        tokens.insert(13, TokenKind::Number(2));
+        tokens.insert(15, TokenKind::Empty(1));
+        tokens.insert(16, TokenKind::ClosingBracket);
+        let fragment = vec![0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16];
+        let parser = Parser::new(content, tokens).unwrap();
+        assert_eq!(
+            Node::Collection {
+                items: vec![
+                    Node::Text {
+                        content: "".into(),
+                        start: 1,
+                        end: 1
+                    },
+                    Node::Text {
+                        content: "A".into(),
+                        start: 2,
+                        end: 3
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 3,
+                        end: 3
+                    },
+                    Node::Text {
+                        content: "B".into(),
+                        start: 5,
+                        end: 6
+                    },
+                    Node::Text {
+                        content: "C".into(),
+                        start: 7,
+                        end: 8
+                    },
+                    Node::Text {
+                        content: "1".into(),
+                        start: 9,
+                        end: 10
+                    },
+                    Node::Text {
+                        content: "3".into(),
+                        start: 11,
+                        end: 12
+                    },
+                    Node::Text {
+                        content: "13".into(),
+                        start: 13,
+                        end: 15
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 15,
+                        end: 15
+                    },
+                ],
+                start: 0,
+                end: 16
+            },
+            parser.collection(&fragment).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_complex_collection() {
+        let content = "{,A,B{C,D}E,,,F{3..5}G,}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Empty(1));
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Comma);
+        tokens.insert(4, TokenKind::Text(1));
+        tokens.insert(5, TokenKind::OpeningBracket);
+        tokens.insert(6, TokenKind::Text(1));
+        tokens.insert(7, TokenKind::Comma);
+        tokens.insert(8, TokenKind::Text(1));
+        tokens.insert(9, TokenKind::ClosingBracket);
+        tokens.insert(10, TokenKind::Text(1));
+        tokens.insert(11, TokenKind::Empty(3));
+        tokens.insert(14, TokenKind::Text(1));
+        tokens.insert(15, TokenKind::OpeningBracket);
+        tokens.insert(16, TokenKind::Number(1));
+        tokens.insert(17, TokenKind::Range);
+        tokens.insert(19, TokenKind::Number(1));
+        tokens.insert(20, TokenKind::ClosingBracket);
+        tokens.insert(21, TokenKind::Text(1));
+        tokens.insert(22, TokenKind::Empty(1));
+        tokens.insert(23, TokenKind::ClosingBracket);
+        let fragment = vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 19, 20, 21, 22, 23,
+        ];
+        let parser = Parser::new(content, tokens).unwrap();
+        assert_eq!(
+            Node::Collection {
+                items: vec![
+                    Node::Text {
+                        content: "".into(),
+                        start: 1,
+                        end: 1
+                    },
+                    Node::Text {
+                        content: "A".into(),
+                        start: 2,
+                        end: 3
+                    },
+                    Node::BraceExpansion {
+                        prefix: Some(Box::new(Node::Text {
+                            content: "B".into(),
+                            start: 4,
+                            end: 5
+                        })),
+                        inside: Some(Box::new(Node::Collection {
+                            items: vec![
+                                Node::Text {
+                                    content: "C".into(),
+                                    start: 6,
+                                    end: 7
+                                },
+                                Node::Text {
+                                    content: "D".into(),
+                                    start: 8,
+                                    end: 9
+                                },
+                            ],
+                            start: 5,
+                            end: 9
+                        })),
+                        postfix: Some(Box::new(Node::Text {
+                            content: "E".into(),
+                            start: 10,
+                            end: 11
+                        })),
+                        start: 4,
+                        end: 11
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 11,
+                        end: 11
+                    },
+                    Node::BraceExpansion {
+                        prefix: Some(Box::new(Node::Text {
+                            content: "F".into(),
+                            start: 14,
+                            end: 15
+                        })),
+                        inside: Some(Box::new(Node::Range {
+                            from: 3.to_string(),
+                            to: 5.to_string(),
+                            start: 16,
+                            end: 20
+                        })),
+                        postfix: Some(Box::new(Node::Text {
+                            content: "G".into(),
+                            start: 21,
+                            end: 22
+                        })),
+                        start: 14,
+                        end: 22
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 22,
+                        end: 22
+                    }
+                ],
+                start: 0,
+                end: 23
+            },
+            parser.collection(&fragment).unwrap(),
+        )
     }
 }
