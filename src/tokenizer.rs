@@ -487,19 +487,19 @@ mod tests {
     #[test]
     fn test_consecutive_commas() {
         let mut tokenizer = Tokenizer::new(",,,{,,,A,,,B,,,},,,").unwrap();
-        let mut expected_map = TokenMap::new();
+        let mut _expected_map = TokenMap::new();
         assert_eq!(tokenizer.tokenize(), Ok(()));
-        expected_map = TokenMap::new();
-        expected_map.insert(0, TokenKind::Text(3));
-        expected_map.insert(3, TokenKind::OpeningBracket);
-        expected_map.insert(4, TokenKind::Empty(3));
-        expected_map.insert(7, TokenKind::Text(1));
-        expected_map.insert(8, TokenKind::Empty(3));
-        expected_map.insert(11, TokenKind::Text(1));
-        expected_map.insert(12, TokenKind::Empty(3));
-        expected_map.insert(15, TokenKind::ClosingBracket);
-        expected_map.insert(16, TokenKind::Text(3));
-        assert_eq!(tokenizer.tokens, expected_map);
+        _expected_map = TokenMap::new();
+        _expected_map.insert(0, TokenKind::Text(3));
+        _expected_map.insert(3, TokenKind::OpeningBracket);
+        _expected_map.insert(4, TokenKind::Empty(3));
+        _expected_map.insert(7, TokenKind::Text(1));
+        _expected_map.insert(8, TokenKind::Empty(3));
+        _expected_map.insert(11, TokenKind::Text(1));
+        _expected_map.insert(12, TokenKind::Empty(3));
+        _expected_map.insert(15, TokenKind::ClosingBracket);
+        _expected_map.insert(16, TokenKind::Text(3));
+        assert_eq!(tokenizer.tokens, _expected_map);
     }
 
     #[test]
