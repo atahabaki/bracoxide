@@ -36,30 +36,14 @@
 //! bracoxide = "0.1.2"
 //! ```
 //!
-//! ```rust
-//! use bracoxide::explode;
-//!
-//! fn main() {
-//!     let content = "foo{1..3}bar";
-//!     match explode(content) {
-//!         Ok(expanded) => {
-//!             // 1. `foo1bar`
-//!             // 2. `foo2bar`
-//!             // 3. `foo3bar`
-//!             println!("Expanded patterns: {:?}", expanded);
-//!         }
-//!         Err(error) => {
-//!             eprintln!("Error occurred: {:?}", error);
-//!         }
-//!     }
-//! }
-//! ```
-//!
 //! We hope you find the str expand crate to be a valuable tool in your Rust projects.
 //! Happy string expansion!
 
-pub mod parser;
-pub mod tokenizer;
+pub(crate) mod parser;
+pub(crate) mod tokenizer;
+
+use parser::{Parser, ParsingError};
+use tokenizer::{TokenizationError, Tokenizer};
 
 /// An error type representing the failure to expand a parsed node.
 ///
@@ -70,7 +54,9 @@ pub mod tokenizer;
 ///
 /// - `NumConversionFailed(String)`: An error indicating that a number conversion failed during expansion.
 ///                                 It contains a string representing the value that failed to be converted.
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum ExpansionError {
     /// Error indicating that a number conversion failed during expansion.
     NumConversionFailed(String),
@@ -86,6 +72,7 @@ impl std::fmt::Display for ExpansionError {
     }
 }
 
+#[cfg(feature = "simplerr")]
 impl std::error::Error for ExpansionError {}
 
 /// Expands the given parsed node into a vector of strings representing the expanded values.
@@ -99,17 +86,6 @@ impl std::error::Error for ExpansionError {}
 /// Returns a result containing a vector of strings representing the expanded values. If the
 /// expansion fails, an `ExpansionError` is returned.
 ///
-/// # Examples
-///
-/// ```
-/// use bracoxide::parser::Node;
-/// use bracoxide::{expand, ExpansionError};
-///
-/// let node = Node::Text { message: "Hello".to_owned().into(), start: 0 };
-/// let expanded = expand(&node);
-/// assert_eq!(expanded, Ok(vec!["Hello".to_owned()]));
-/// ```
-///
 /// # Panics
 ///
 /// This function does not panic.
@@ -122,15 +98,23 @@ impl std::error::Error for ExpansionError {}
 /// # Safety
 ///
 /// This function operates on valid parsed nodes and does not use unsafe code internally.
-pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
+pub(crate) fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
     match node {
-        parser::Node::Text { message, start: _ } => Ok(vec![message.as_ref().to_owned()]),
+        parser::Node::Text {
+            content,
+            #[cfg(test)]
+                start: _,
+            #[cfg(test)]
+                end: _,
+        } => Ok(vec![content.to_owned()]),
         parser::Node::BraceExpansion {
             prefix,
             inside,
             postfix,
-            start: _,
-            end: _,
+            #[cfg(test)]
+                start: _,
+            #[cfg(test)]
+                end: _,
         } => {
             let mut inner = vec![];
             let prefixs: Vec<String> = if let Some(prefix) = prefix {
@@ -159,8 +143,10 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
         }
         parser::Node::Collection {
             items,
-            start: _,
-            end: _,
+            #[cfg(test)]
+                start: _,
+            #[cfg(test)]
+                end: _,
         } => {
             let mut inner = vec![];
             for item in items {
@@ -172,8 +158,10 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
         parser::Node::Range {
             from,
             to,
-            start: _,
-            end: _,
+            #[cfg(test)]
+                start: _,
+            #[cfg(test)]
+                end: _,
         } => {
             let from = if let Ok(from) = from.parse::<usize>() {
                 from
@@ -198,18 +186,23 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
 
 /// Same functionality as [bracoxidize] but with explosive materials. This crates' all
 /// Error types (except the [OxidizationError]) implements [std::error::Error] trait. Why not get all the benefits from it?
+#[cfg(feature = "simplerr")]
 pub fn explode(content: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let tokens = tokenizer::tokenize(content)?;
-    let ast = parser::parse(&tokens)?;
+    let mut tokenizer = Tokenizer::new(content)?;
+    tokenizer.tokenize()?;
+    let parser = Parser::from_tokenizer(tokenizer)?;
+    let ast = parser.parse()?;
     let expansions = expand(&ast)?;
     Ok(expansions)
 }
 
 /// Errors that can occur during the Brace Expansion process.
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum OxidizationError {
-    TokenizationError(tokenizer::TokenizationError),
-    ParsingError(parser::ParsingError),
+    TokenizerError(TokenizationError),
+    ParserError(ParsingError),
     ExpansionError(ExpansionError),
 }
 
@@ -223,198 +216,22 @@ pub enum OxidizationError {
 ///
 /// Returns a `Result` containing the expanded brace patterns as `Vec<String>`,
 /// or an `OxidizationError` if an error occurs during the process.
-///
-/// # Examples
-///
-/// ```rust
-/// use bracoxide::{bracoxidize, OxidizationError};
-///
-/// fn main() {
-///     let content = "foo{1..3}bar";
-///     match bracoxidize(content) {
-///         Ok(expanded) => {
-///             println!("Expanded patterns: {:?}", expanded);
-///         }
-///         Err(error) => {
-///             eprintln!("Error occurred: {:?}", error);
-///         }
-///     }
-/// }
-/// ```
-pub fn bracoxidize(content: &str) -> Result<Vec<String>, OxidizationError> {
-    // Tokenize the input string
-    let tokens = match tokenizer::tokenize(content) {
-        Ok(tokens) => tokens,
-        Err(error) => return Err(OxidizationError::TokenizationError(error)),
-    };
-
-    // Parse the tokens into an abstract syntax tree
-    let ast = match parser::parse(&tokens) {
-        Ok(ast) => ast,
-        Err(error) => return Err(OxidizationError::ParsingError(error)),
-    };
-
-    // Expand the brace patterns in the AST
-    let expanded = match expand(&ast) {
-        Ok(expanded) => expanded,
-        Err(error) => return Err(OxidizationError::ExpansionError(error)),
-    };
-
-    Ok(expanded)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::parser::Node;
-    use super::*;
-    #[test]
-    fn test_expand_complex() {
-        assert_eq!(
-            expand(&Node::BraceExpansion {
-                prefix: Some(Box::new(Node::Text {
-                    message: Arc::new("A".into()),
-                    start: 0
-                })),
-                inside: Some(Box::new(Node::Collection {
-                    items: vec![
-                        Node::Text {
-                            message: Arc::new("B".into()),
-                            start: 2
-                        },
-                        Node::BraceExpansion {
-                            prefix: Some(Box::new(Node::Text {
-                                message: Arc::new("C".into()),
-                                start: 4
-                            })),
-                            inside: Some(Box::new(Node::Collection {
-                                items: vec![
-                                    Node::Text {
-                                        message: Arc::new("D".into()),
-                                        start: 6
-                                    },
-                                    Node::Text {
-                                        message: Arc::new("E".into()),
-                                        start: 8
-                                    },
-                                ],
-                                start: 5,
-                                end: 9
-                            })),
-                            postfix: Some(Box::new(Node::Text {
-                                message: Arc::new("F".into()),
-                                start: 10
-                            })),
-                            start: 4,
-                            end: 10,
-                        },
-                        Node::Text {
-                            message: Arc::new("G".into()),
-                            start: 12
-                        }
-                    ],
-                    start: 1,
-                    end: 13
-                })),
-                postfix: Some(Box::new(Node::BraceExpansion {
-                    prefix: Some(Box::new(Node::Text {
-                        message: Arc::new("H".into()),
-                        start: 14
-                    })),
-                    inside: Some(Box::new(Node::Collection {
-                        items: vec![
-                            Node::Text {
-                                message: Arc::new("J".into()),
-                                start: 16
-                            },
-                            Node::Text {
-                                message: Arc::new("K".into()),
-                                start: 18
-                            },
-                        ],
-                        start: 15,
-                        end: 19
-                    })),
-                    postfix: Some(Box::new(Node::BraceExpansion {
-                        prefix: Some(Box::new(Node::Text {
-                            message: Arc::new("L".into()),
-                            start: 20
-                        })),
-                        inside: Some(Box::new(Node::Range {
-                            from: Arc::new("3".into()),
-                            to: Arc::new("5".into()),
-                            start: 21,
-                            end: 26
-                        })),
-                        postfix: None,
-                        start: 20,
-                        end: 26
-                    })),
-                    start: 14,
-                    end: 26
-                })),
-                start: 0,
-                end: 26
-            }),
-            Ok(vec![
-                "ABHJL3".to_owned(),
-                "ABHJL4".to_owned(),
-                "ABHJL5".to_owned(),
-                "ABHKL3".to_owned(),
-                "ABHKL4".to_owned(),
-                "ABHKL5".to_owned(),
-                "ACDFHJL3".to_owned(),
-                "ACDFHJL4".to_owned(),
-                "ACDFHJL5".to_owned(),
-                "ACDFHKL3".to_owned(),
-                "ACDFHKL4".to_owned(),
-                "ACDFHKL5".to_owned(),
-                "ACEFHJL3".to_owned(),
-                "ACEFHJL4".to_owned(),
-                "ACEFHJL5".to_owned(),
-                "ACEFHKL3".to_owned(),
-                "ACEFHKL4".to_owned(),
-                "ACEFHKL5".to_owned(),
-                "AGHJL3".to_owned(),
-                "AGHJL4".to_owned(),
-                "AGHJL5".to_owned(),
-                "AGHKL3".to_owned(),
-                "AGHKL4".to_owned(),
-                "AGHKL5".to_owned(),
-            ])
-        )
-    }
-    #[test]
-    fn test_expand_complex_bracoxidize() {
-        assert_eq!(
-            bracoxidize("A{B,C{D,E}F,G}H{J,K}L{3..5}"),
-            Ok(vec![
-                "ABHJL3".to_owned(),
-                "ABHJL4".to_owned(),
-                "ABHJL5".to_owned(),
-                "ABHKL3".to_owned(),
-                "ABHKL4".to_owned(),
-                "ABHKL5".to_owned(),
-                "ACDFHJL3".to_owned(),
-                "ACDFHJL4".to_owned(),
-                "ACDFHJL5".to_owned(),
-                "ACDFHKL3".to_owned(),
-                "ACDFHKL4".to_owned(),
-                "ACDFHKL5".to_owned(),
-                "ACEFHJL3".to_owned(),
-                "ACEFHJL4".to_owned(),
-                "ACEFHJL5".to_owned(),
-                "ACEFHKL3".to_owned(),
-                "ACEFHKL4".to_owned(),
-                "ACEFHKL5".to_owned(),
-                "AGHJL3".to_owned(),
-                "AGHJL4".to_owned(),
-                "AGHJL5".to_owned(),
-                "AGHKL3".to_owned(),
-                "AGHKL4".to_owned(),
-                "AGHKL5".to_owned(),
-            ])
-        )
+pub fn bracoxidize(content: impl ToString) -> Result<Vec<String>, OxidizationError> {
+    let content = content.to_string();
+    match Tokenizer::new(&content) {
+        Ok(mut tokenizer) => match tokenizer.tokenize() {
+            Ok(_) => match Parser::from_tokenizer(tokenizer) {
+                Ok(parser) => match parser.parse() {
+                    Ok(n) => match expand(&n) {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(OxidizationError::ExpansionError(e)),
+                    },
+                    Err(e) => Err(OxidizationError::ParserError(e)),
+                },
+                Err(e) => Err(OxidizationError::ParserError(e)),
+            },
+            Err(e) => Err(OxidizationError::TokenizerError(e)),
+        },
+        Err(e) => Err(OxidizationError::TokenizerError(e)),
     }
 }

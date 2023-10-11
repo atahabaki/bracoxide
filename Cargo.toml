@@ -8,6 +8,9 @@ license = "MIT"
 keywords = ["brace_expansion","parsing","combination","permutation","string_manipulation"]
 categories = ["parser-implementations"]
 
+[features]
+simplerr = []
+
 [dev-dependencies]
 criterion = "0.5.1"
 

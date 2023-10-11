@@ -6,745 +6,966 @@
  * Copyright (c) 2023 A. Taha Baki <atahabaki@pm.me>
  */
 
-//! Provides functions and types for parsing tokens into an abstract syntax tree (AST).
-//!
-//! ## Overview
-//!
-//! The parser module is responsible for transforming a sequence of tokens into a structured AST representation.
-//! It takes the output of the tokenizer and performs the necessary parsing operations to generate the AST nodes.
-//! The AST can then be used for further processing, interpretation, or code generation.
+use crate::tokenizer::*;
 
-use std::sync::Arc;
-
-use crate::tokenizer::Token;
-
-/// Represents a node in the parsed AST.
-///
-/// The `Node` enum captures different elements in the parsed abstract syntax tree (AST).
-/// It includes variants for representing text, brace expansions, and ranges.
-#[derive(Debug, PartialEq, Clone)]
-pub enum Node {
-    /// Represents a text node.
-    /// It contains the text value and the starting position of the text.
-    Text { message: Arc<String>, start: usize },
-    /// Represents a brace expansion node.
-    /// It includes the prefix, inside, and outside node, along with the
-    /// starting positions.
-    BraceExpansion {
-        prefix: Option<Box<Node>>,
-        inside: Option<Box<Node>>,
-        postfix: Option<Box<Node>>,
-        start: usize,
-        end: usize,
-    },
-    /// Represents comma seperated Nodes in braces.
-    Collection {
-        items: Vec<Node>,
-        start: usize,
-        end: usize,
-    },
-    /// Represents a range node.
-    /// It contains the starting and ending numbers of the range, along with the
-    /// starting position.
-    Range {
-        from: Arc<String>,
-        to: Arc<String>,
-        start: usize,
-        end: usize,
-    },
-}
-
-/// Represents an error that can occur during parsing.
-///
-/// The `ParsingError` enum captures different error scenarios that can happen during parsing.
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
 pub enum ParsingError {
-    /// Indicates that there are no tokens to parse.
+    NoContent,
     NoTokens,
-    /// Expected OBra, not found... e.g. `..3}` or `1..3`
-    OBraExpected(usize),
-    /// Expected closing bra, not fond... e.g. `{0..3` => Expected Syntax: `{0..3}`
-    CBraExpected(usize),
-    /// Expected Range Start number... e.g. `{...3}` or `{..3`
-    RangeStartLimitExpected(usize),
-    /// Expected Range Ending number... e.g. `{0..`
-    RangeEndLimitExpected(usize),
-    /// It is not Text, but expected to be a text.
+    NoFragment,
+    ExtraOpeningBracket(usize),
+    ExtraClosingBracket(usize),
+    OpeningBracketExpected(usize),
+    NoCommaInRange(usize),
+    NoTextInRange(usize),
+    ExtraRange(usize),
     ExpectedText(usize),
-    /// Comma is used invalid, e.g. `{A..,B}` or `{A,..B}`
-    InvalidCommaUsage(usize),
-    /// Extra Closing Brace, e.g. `{} }`
-    ExtraCBra(usize),
-    /// Extra Opening Brace, e.g. `{3{..5}`
-    ExtraOBra(usize),
-    /// Nothing in braces, e.g. `{}`
+    StartLimitExpected(usize),
+    EndLimitExpected(usize),
     NothingInBraces(usize),
-    /// Range can't have text in it.
-    RangeCantHaveText(usize),
-    /// Extra Range Operator have used, e.g. `{3..5..}`
-    ExtraRangeOperator(usize),
 }
 
 impl std::fmt::Display for ParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ParsingError::NoContent => write!(f, "Content is empty."),
             ParsingError::NoTokens => write!(f, "Token list is empty."),
-            ParsingError::OBraExpected(i) => write!(f, "An opening brace ({{) expected at {i}"),
-            ParsingError::CBraExpected(i) => write!(f, "A closing brace (}}) expected at {i}"),
-            ParsingError::RangeStartLimitExpected(i) => {
-                write!(f, "Range start limit not specified. Expected at {i}")
+            ParsingError::NoFragment => write!(f, "Fragment is empty."),
+            ParsingError::ExtraOpeningBracket(x) => {
+                write!(f, "Opening bracket was not expected at {x}.")
             }
-            ParsingError::RangeEndLimitExpected(i) => {
-                write!(f, "Range end limit not specified. Expected at {i}")
+            ParsingError::ExtraClosingBracket(x) => {
+                write!(f, "Closing bracket was not expected at {x}.")
             }
-            ParsingError::ExpectedText(i) => write!(f, "Expected text at {i}."),
-            ParsingError::InvalidCommaUsage(i) => write!(f, "Unexpected comma at {i}"),
-            ParsingError::ExtraCBra(i) => write!(f, "Used extra closing bracket at {i}"),
-            ParsingError::ExtraOBra(i) => write!(f, "Used extra opening bracket at {i}"),
-            ParsingError::NothingInBraces(i) => write!(
-                f,
-                "Empty braces at {i} causes question whether to skip it or add to tree."
-            ),
-            ParsingError::RangeCantHaveText(i) => write!(
-                f,
-                "Unrecognized char at {i}. Range syntax doesn't allow other than [0-9.]"
-            ),
-            ParsingError::ExtraRangeOperator(i) => {
-                write!(f, "Extra range operator (..) used at {i}")
+            ParsingError::OpeningBracketExpected(x) => {
+                write!(f, "Opening bracket expected at {x}.")
             }
+            ParsingError::NoCommaInRange(x) => {
+                write!(f, "Comma is not allowed in Range syntax at {x}")
+            }
+            ParsingError::NoTextInRange(x) => {
+                write!(f, "Texts is not allowed in Range syntax at {x}")
+            }
+            ParsingError::ExtraRange(x) => {
+                write!(f, "Extra Range token is not allowed in Range syntax at {x}")
+            }
+            ParsingError::ExpectedText(x) => write!(f, "Expected text but found none at {x}."),
+            ParsingError::StartLimitExpected(x) => {
+                write!(f, "Start limit expected for Range at {x}.")
+            }
+            ParsingError::EndLimitExpected(x) => write!(f, "End limit expected for Range at {x}"),
+            ParsingError::NothingInBraces(x) => write!(f, "Nothing inside braces at {x}"),
         }
     }
 }
 
+#[cfg(feature = "simplerr")]
 impl std::error::Error for ParsingError {}
 
-/// Parses a sequence of tokens into an abstract syntax tree (AST).
-///
-/// The [parse] function takes a vector of tokens as input and performs the parsing operation.
-/// It returns a result with the parsed AST nodes on success, or a specific error on failure.
-///
-/// # Arguments
-///
-/// * `tokens` - A vector of tokens to be parsed.
-///
-/// # Returns
-///
-/// * `Result<Node, ParsingError>` - A result containing the parsed AST nodes or an error.
-pub fn parse(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
-    if tokens.is_empty() {
-        return Err(ParsingError::NoTokens);
-    }
-    match seperate(tokens) {
-        Ok(seperated) => {
-            let prefix = if let Some(prefix) = seperated.0 {
-                match text(&prefix) {
-                    Ok(n) => Some(Box::new(n)),
-                    Err(e) => return Err(e),
-                }
-            } else {
-                None
-            };
-            let inside = if let Some(inside) = seperated.1 {
-                match collection(&inside) {
-                    Ok(n) => Some(Box::new(n)),
-                    Err(e) => return Err(e),
-                }
-            } else {
-                None
-            };
-            let postfix = if let Some(postfix) = seperated.2 {
-                let parsed = if postfix
-                    .iter()
-                    .any(|t| matches!(t, Token::OBra(_) | Token::CBra(_)))
-                {
-                    parse(&postfix)
-                } else {
-                    text(&postfix)
-                };
-                match parsed {
-                    Ok(n) => Some(Box::new(n)),
-                    Err(e) => return Err(e),
-                }
-            } else {
-                None
-            };
-            let mut pos = (0_usize, 0_usize);
-            if let Some(token) = tokens.first() {
-                match token {
-                    Token::OBra(s)
-                    | Token::CBra(s)
-                    | Token::Comma(s)
-                    | Token::Text(_, s)
-                    | Token::Number(_, s)
-                    | Token::Range(s) => pos.0 = *s,
-                }
-            }
-            if let Some(token) = tokens.last() {
-                match token {
-                    Token::OBra(s) | Token::CBra(s) | Token::Comma(s) => pos.1 = *s,
-                    Token::Text(b, s) | Token::Number(b, s) => {
-                        pos.1 = if b.len() == 1 { *s } else { s + b.len() };
-                    }
-                    Token::Range(s) => pos.1 = s + 1,
-                }
-            }
-            Ok(Node::BraceExpansion {
-                prefix,
-                inside,
-                postfix,
-                start: pos.0,
-                end: pos.1,
-            })
-        }
-        Err(e) => Err(e),
-    }
+#[derive(PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(feature = "simplerr", derive(Debug))]
+pub(crate) enum Node {
+    Text {
+        content: String,
+        #[cfg(test)]
+        start: usize,
+        #[cfg(test)]
+        end: usize,
+    },
+    BraceExpansion {
+        prefix: Option<Box<Node>>,
+        inside: Option<Box<Node>>,
+        postfix: Option<Box<Node>>,
+        #[cfg(test)]
+        start: usize,
+        #[cfg(test)]
+        end: usize,
+    },
+    Collection {
+        items: Vec<Node>,
+        #[cfg(test)]
+        start: usize,
+        #[cfg(test)]
+        end: usize,
+    },
+    Range {
+        from: String,
+        to: String,
+        #[cfg(test)]
+        start: usize,
+        #[cfg(test)]
+        end: usize,
+    },
 }
 
-/// Separates the given tokens into prefix, inside, and postfix sections based on the bracing structure.
-///
-/// # Arguments
-///
-/// * `tokens` - A vector of tokens to be separated.
-///
-/// # Returns
-///
-/// Returns a result containing tuples of optional vectors representing the prefix, inside, and
-/// postfix sections respectively. If the separation fails, a [ParsingError] is returned.
-fn seperate(
-    tokens: &Vec<Token>,
-) -> Result<(Option<Vec<Token>>, Option<Vec<Token>>, Option<Vec<Token>>), ParsingError> {
-    if tokens.is_empty() {
-        return Err(ParsingError::NoTokens);
-    }
-    #[derive(Debug, PartialEq)]
-    enum BracingState {
-        Prefix,
-        Inside,
-        Postfix,
-    }
-
-    let mut count = (0_usize, 0_usize);
-    let mut inside_tokens = vec![];
-    let mut prefix_tokens = vec![];
-    let mut postfix_tokens = vec![];
-    let mut bracing_state = BracingState::Prefix;
-    for token in tokens {
-        match token {
-            Token::OBra(_) => {
-                count.0 += 1;
-                match bracing_state {
-                    BracingState::Prefix => {
-                        bracing_state = BracingState::Inside;
-                        inside_tokens.push(token.clone());
-                    }
-                    BracingState::Inside => inside_tokens.push(token.clone()),
-                    BracingState::Postfix => postfix_tokens.push(token.clone()),
-                }
-            }
-            Token::CBra(s) => {
-                count.1 += 1;
-                if count.0 < count.1 {
-                    return Err(ParsingError::ExtraCBra(*s));
-                }
-                match bracing_state {
-                    BracingState::Prefix => return Err(ParsingError::ExtraCBra(*s)),
-                    BracingState::Inside => {
-                        inside_tokens.push(token.clone());
-                        if count.0 == count.1 {
-                            bracing_state = BracingState::Postfix;
-                        }
-                    }
-                    BracingState::Postfix => postfix_tokens.push(token.clone()),
-                }
-            }
-            Token::Comma(s) | Token::Range(s) if bracing_state == BracingState::Prefix => {
-                return Err(ParsingError::OBraExpected(*s));
-            }
-            _ => match bracing_state {
-                BracingState::Prefix => prefix_tokens.push(token.clone()),
-                BracingState::Inside => inside_tokens.push(token.clone()),
-                BracingState::Postfix => postfix_tokens.push(token.clone()),
-            },
-        }
-    }
-    let prefix = if prefix_tokens.is_empty() {
-        None
-    } else {
-        Some(prefix_tokens)
-    };
-    let inside = if inside_tokens.is_empty() {
-        None
-    } else {
-        Some(inside_tokens)
-    };
-    let postfix = if postfix_tokens.is_empty() {
-        None
-    } else {
-        Some(postfix_tokens)
-    };
-    Ok((prefix, inside, postfix))
+pub(crate) struct Parser<'a> {
+    _content: &'a str,
+    tokens: TokenMap,
 }
 
-/// Parses a sequence of tokens into a text node.
-///
-/// # Arguments
-///
-/// * `tokens` - A vector of tokens representing the text to be parsed.
-///
-/// # Returns
-///
-/// Returns a result containing a [Node] representing the parsed text. If the parsing fails,
-/// a [ParsingError] is returned.
-fn text(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
-    if tokens.is_empty() {
-        return Err(ParsingError::NoTokens);
-    }
-    let mut buffer = String::new();
-    let mut iter = tokens.iter();
-    let mut start = 0_usize;
-    if let Some(token) = iter.next() {
-        match token {
-            Token::OBra(s) | Token::CBra(s) | Token::Comma(s) | Token::Range(s) => {
-                return Err(ParsingError::ExpectedText(*s))
-            }
-            Token::Text(b, s) | Token::Number(b, s) => {
-                buffer.push_str(b);
-                start = *s;
-            }
-        }
-    }
-    for token in iter {
-        match token {
-            Token::OBra(s) | Token::CBra(s) | Token::Comma(s) | Token::Range(s) => {
-                return Err(ParsingError::ExpectedText(*s))
-            }
-            Token::Text(b, _) | Token::Number(b, _) => buffer.push_str(b),
-        }
-    }
-    Ok(Node::Text {
-        message: Arc::new(buffer),
-        start,
-    })
-}
+pub(crate) type _Fragment = Vec<usize>;
+pub(crate) type _Fragments = (Option<_Fragment>, Option<_Fragment>, Option<_Fragment>);
 
-/// Parses a sequence of tokens into a range node.
-///
-/// # Arguments
-///
-/// * `tokens` - A vector of tokens representing the range to be parsed.
-///
-/// # Returns
-///
-/// Returns a result containing a [Node] representing the parsed range.
-/// If the parsing fails, a [ParsingError] is returned.
-fn range(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
-    if tokens.is_empty() {
-        return Err(ParsingError::NoTokens);
+impl<'a> Parser<'a> {
+    pub(crate) fn from_tokenizer(tokenizer: Tokenizer<'a>) -> Result<Self, ParsingError> {
+        if tokenizer.tokens.is_empty() {
+            return Err(ParsingError::NoTokens);
+        }
+        Ok(Parser {
+            _content: tokenizer.get_content(),
+            tokens: tokenizer.tokens,
+        })
     }
-    let mut limits = (String::new(), String::new());
-    let mut is_start = true;
-    let mut is_first = true;
-    let mut count = 0_u8;
-    let mut pos = (0_usize, 0_usize);
 
-    for token in tokens {
-        match token {
-            Token::OBra(s) => return Err(ParsingError::ExtraOBra(*s)),
-            Token::CBra(s) => return Err(ParsingError::ExtraCBra(*s)),
-            Token::Comma(s) => return Err(ParsingError::InvalidCommaUsage(*s)),
-            Token::Text(_, s) => return Err(ParsingError::RangeCantHaveText(*s)),
-            Token::Number(b, s) => {
-                if is_first {
-                    pos.0 = *s;
-                    is_first = false;
-                }
-                match is_start {
-                    true => limits.0.push_str(b),
-                    false => limits.1.push_str(b),
-                }
-            }
-            Token::Range(e) => {
-                if is_first {
-                    return Err(ParsingError::RangeStartLimitExpected(*e));
-                }
-                count += 1;
-                if count != 1 {
-                    return Err(ParsingError::ExtraRangeOperator(*e));
-                }
-                pos.1 = *e;
-                is_start = false;
-            }
+    pub(crate) fn _new(content: &'a str, tokens: TokenMap) -> Result<Self, ParsingError> {
+        if content.is_empty() {
+            return Err(ParsingError::NoContent);
         }
+        if tokens.is_empty() {
+            return Err(ParsingError::NoTokens);
+        }
+        Ok(Parser {
+            _content: content,
+            tokens,
+        })
     }
-    if limits.1.is_empty() {
-        return Err(ParsingError::RangeEndLimitExpected(pos.1));
-    }
-    let len = limits.1.len();
-    Ok(Node::Range {
-        from: Arc::new(limits.0),
-        to: Arc::new(limits.1),
-        start: pos.0 - 1,
-        // +1 for '.', +1 for `}`
-        end: pos.1 + 2 + len,
-    })
-}
 
-/// Parses a sequence of tokens into a [Node::Collection] node.
-///
-/// # Arguments
-///
-/// * `tokens` - A vector of tokens representing the collection to be parsed.
-///
-/// # Returns
-///
-/// Returns a result containing a [Node] representing the parsed collection. If the parsing fails, a [ParsingError] is returned.
-fn collection(tokens: &Vec<Token>) -> Result<Node, ParsingError> {
-    if tokens.is_empty() {
-        return Err(ParsingError::NoTokens);
+    fn get_a_slice_of_cake(&self, start: usize, end: usize) -> String {
+        self._content
+            .chars()
+            .skip(start)
+            .take(end - start)
+            .collect()
     }
-    // start and end positions.
-    let mut pos = (0_usize, 0_usize);
-    // in the seperate function, we're dealing with `{}}` or `{{}`, no need to deal with it here.
-    // count of OBra (`{`), CBra (`}`), and the seperator (`,`).
-    let mut count = (0_usize, 0_usize, 0_usize);
-    let mut collections: Vec<Vec<Token>> = vec![];
-    let mut current = vec![];
-    for token in tokens {
-        match token {
-            Token::Comma(s) if count.0 == (count.1 + 1) => {
-                // increase the seperator count by 1.
-                count.2 += 1;
-                if current.is_empty() {
-                    match collections.is_empty() {
-                        true => current.push(Token::Text(Arc::new(String::new()), *s)),
-                        // The previous token was comma.
-                        false => current.push(Token::Text(Arc::new(String::new()), s - 1)),
-                    }
-                }
-                // we dealt with if it's empty.
-                // so it can't be empty.
-                collections.push(current.clone());
-                current.clear();
-            }
-            Token::Comma(_) => {
-                current.push(token.clone());
-            }
-            Token::OBra(start) => {
-                if count.0 == 0 {
-                    pos.0 = *start;
-                } else {
-                    current.push(token.clone());
-                }
-                count.0 += 1;
-            }
-            Token::CBra(end) => {
-                count.1 += 1;
-                if count.0 == count.1 {
-                    pos.1 = *end;
-                } else {
-                    current.push(token.clone());
-                }
-            }
-            _ => current.push(token.clone()),
+
+    pub(crate) fn parse(&self) -> Result<Node, ParsingError> {
+        let mut keys: Vec<usize> = self.tokens.keys().cloned().collect();
+        keys.sort();
+        self.reparse(&keys)
+    }
+
+    pub(crate) fn reparse(&self, fragment: &Vec<usize>) -> Result<Node, ParsingError> {
+        if fragment.is_empty() {
+            return Err(ParsingError::NoFragment);
         }
-    }
-    if current.is_empty() && collections.len() == count.2 {
-        current.push(Token::Text(Arc::new(String::new()), pos.1 - 1));
-    }
-    collections.push(current);
-    match collections.len() {
-        0 => Err(ParsingError::NothingInBraces(pos.0)),
-        1 => {
-            // it is absolutely Text or Range
-            // it can not be Collection.
-            //
-            // Check for `Token::Range(_)` exist or not
-            // if not exist, then it's text, return text(&current)
-            // if exist return range(&current)
-            let collection = &collections[0];
-            match collection.iter().any(|t| matches!(t, Token::Range(_))) {
-                true => range(collection),
-                false => text(collection),
-            }
-        }
-        _ => {
-            // Iterate over every collection on collections
-            // If collection has `Token::OBra(_)` or `Token::CBra(_)`,
-            //  parse it? How?
-            //  It is better to put this collection inside parse(&collection), but is it any good?
-            // Return a collection.
-            let mut parsed_collections = vec![];
-            for collection in collections {
-                if collection
-                    .iter()
-                    .any(|t| matches!(t, Token::OBra(_) | Token::CBra(_)))
-                {
-                    match parse(&collection) {
-                        Ok(n) => parsed_collections.push(n),
+        match self.seperate(fragment) {
+            Ok(seperated) => {
+                let prefix = if let Some(prefix) = seperated.0 {
+                    match self.text(&prefix) {
+                        Ok(n) => Some(Box::new(n)),
                         Err(e) => return Err(e),
                     }
                 } else {
-                    parsed_collections.push(text(&collection)?);
+                    None
+                };
+                let inside = if let Some(inside) = seperated.1 {
+                    match self.collection(&inside) {
+                        Ok(n) => Some(Box::new(n)),
+                        Err(e) => return Err(e),
+                    }
+                } else {
+                    None
+                };
+                let postfix = if let Some(postfix) = seperated.2 {
+                    let parsed = if postfix.iter().any(|ti| {
+                        matches!(
+                            self.tokens.get(ti).unwrap(),
+                            TokenKind::OpeningBracket | TokenKind::ClosingBracket
+                        )
+                    }) {
+                        self.reparse(&postfix)
+                    } else {
+                        self.text(&postfix)
+                    };
+                    match parsed {
+                        Ok(n) => Some(Box::new(n)),
+                        Err(e) => return Err(e),
+                    }
+                } else {
+                    None
+                };
+                #[cfg(test)]
+                let mut pos = (0_usize, 0_usize);
+                #[cfg(test)]
+                if let Some(token_index) = fragment.first() {
+                    pos.0 = *token_index;
+                }
+                #[cfg(test)]
+                if let Some(token_index) = fragment.last() {
+                    pos.1 = *token_index + self.tokens.get(token_index).unwrap()._get_length();
+                }
+                Ok(Node::BraceExpansion {
+                    prefix,
+                    inside,
+                    postfix,
+                    #[cfg(test)]
+                    start: pos.0,
+                    #[cfg(test)]
+                    end: pos.1,
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn seperate(&self, fragment: &Vec<usize>) -> Result<_Fragments, ParsingError> {
+        if fragment.is_empty() {
+            return Err(ParsingError::NoFragment);
+        }
+        #[derive(PartialEq)]
+        enum WalkState {
+            _Prefix,
+            _Inside,
+            _Postfix,
+        }
+        // initialize
+        let mut count = (0_usize, 0_usize);
+        let mut prefix = vec![];
+        let mut inside = vec![];
+        let mut postfix = vec![];
+        let mut bracing_state = WalkState::_Prefix;
+        for token_index in fragment.iter() {
+            if let Some(token) = self.tokens.get(token_index) {
+                match token {
+                    TokenKind::OpeningBracket => {
+                        count.0 += 1;
+                        match bracing_state {
+                            WalkState::_Prefix => {
+                                bracing_state = WalkState::_Inside;
+                                inside.push(*token_index);
+                            }
+                            WalkState::_Inside => inside.push(*token_index),
+                            WalkState::_Postfix => postfix.push(*token_index),
+                        }
+                    }
+                    TokenKind::ClosingBracket => {
+                        count.1 += 1;
+                        match bracing_state {
+                            WalkState::_Prefix => {
+                                return Err(ParsingError::ExtraClosingBracket(*token_index))
+                            }
+                            WalkState::_Inside => {
+                                inside.push(*token_index);
+                                if count.0 == count.1 {
+                                    bracing_state = WalkState::_Postfix;
+                                }
+                            }
+                            WalkState::_Postfix => postfix.push(*token_index),
+                        }
+                    }
+                    TokenKind::Comma | TokenKind::Range if bracing_state == WalkState::_Prefix => {
+                        return Err(ParsingError::OpeningBracketExpected(*token_index))
+                    }
+                    _ => match bracing_state {
+                        WalkState::_Prefix => prefix.push(*token_index),
+                        WalkState::_Inside => inside.push(*token_index),
+                        WalkState::_Postfix => postfix.push(*token_index),
+                    },
+                }
+            } else {
+                // I don't think this will ever got reach.
+                // unless memory written by another program, e.g. CheatEngine
+                unreachable!();
+            }
+        }
+        let pre = if prefix.is_empty() {
+            None
+        } else {
+            Some(prefix)
+        };
+        let ins = if inside.is_empty() {
+            None
+        } else {
+            Some(inside)
+        };
+        let post = if postfix.is_empty() {
+            None
+        } else {
+            Some(postfix)
+        };
+        Ok((pre, ins, post))
+    }
+
+    pub(crate) fn text(&self, fragment: &Vec<usize>) -> Result<Node, ParsingError> {
+        if fragment.is_empty() {
+            return Err(ParsingError::NoFragment);
+        }
+        let mut content = String::new();
+        // it is safe to use unwrap here, since we know that
+        // fragment is not empty.
+        let _start_pos = fragment.first().unwrap();
+        for token_index in fragment.iter() {
+            if let Some(token) = self.tokens.get(token_index) {
+                match token {
+                    TokenKind::Text(l) | TokenKind::Number(l) => content.push_str(
+                        self.get_a_slice_of_cake(*token_index, *token_index + l)
+                            .as_str(),
+                    ),
+                    TokenKind::Empty(_) => content.push_str(""),
+                    _ => return Err(ParsingError::ExpectedText(*token_index)),
                 }
             }
-            Ok(Node::Collection {
-                items: parsed_collections,
-                start: pos.0,
-                end: pos.1,
-            })
         }
+        let _len = content.chars().count();
+        Ok(Node::Text {
+            content,
+            #[cfg(test)]
+            start: *_start_pos,
+            #[cfg(test)]
+            end: *_start_pos + _len,
+        })
+    }
+
+    pub(crate) fn collection(&self, fragment: &Vec<usize>) -> Result<Node, ParsingError> {
+        if fragment.is_empty() {
+            return Err(ParsingError::NoFragment);
+        }
+        let mut pos = (0_usize, 0_usize);
+        let mut count = (0_usize, 0_usize);
+        let mut collections: Vec<Vec<usize>> = vec![];
+        let mut current = vec![];
+        for token_index in fragment.iter() {
+            if let Some(token) = self.tokens.get(token_index) {
+                match token {
+                    TokenKind::Empty(_) if count.0 == (count.1 + 1) => {
+                        if !current.is_empty() {
+                            collections.push(current.clone());
+                            current.clear();
+                        }
+                        current.push(*token_index);
+                        collections.push(current.clone());
+                        current.clear();
+                    }
+                    TokenKind::Comma if count.0 == (count.1 + 1) => {
+                        if !current.is_empty() {
+                            collections.push(current.clone());
+                            current.clear();
+                        }
+                    }
+                    TokenKind::Empty(_) | TokenKind::Comma => current.push(*token_index),
+                    TokenKind::OpeningBracket => {
+                        if count.0 == 0 {
+                            pos.0 = *token_index;
+                        } else {
+                            current.push(*token_index);
+                        }
+                        count.0 += 1;
+                    }
+                    TokenKind::ClosingBracket => {
+                        count.1 += 1;
+                        if count.0 == count.1 {
+                            pos.1 = *token_index;
+                        } else {
+                            current.push(*token_index);
+                        }
+                    }
+                    _ => current.push(*token_index),
+                }
+            }
+        }
+        if !current.is_empty() {
+            collections.push(current.clone());
+        }
+        match collections.len() {
+            0 => Err(ParsingError::NothingInBraces(pos.0)),
+            1 => {
+                // it is absolutely text or range
+                // can not be collection.
+                let collection = &collections[0];
+                match collection
+                    .iter()
+                    .any(|t| matches!(self.tokens.get(t).unwrap(), TokenKind::Range))
+                {
+                    true => self.range(collection),
+                    false => self.text(collection),
+                }
+            }
+            _ => {
+                // Iterate over every collection on collections
+                // If collection has `Token::OBra(_)` or `Token::CBra(_)`,
+                //  parse it? How?
+                //  It is better to put this collection inside parse(&collection), but is it any good?
+                // Return a collection.
+                let mut parsed_collection = vec![];
+                for collection in collections {
+                    if collection.iter().any(|ti| {
+                        matches!(
+                            self.tokens.get(ti).unwrap(),
+                            TokenKind::OpeningBracket | TokenKind::ClosingBracket
+                        )
+                    }) {
+                        match self.reparse(&collection) {
+                            Ok(n) => parsed_collection.push(n),
+                            Err(e) => return Err(e),
+                        }
+                    } else {
+                        parsed_collection.push(self.text(&collection)?);
+                    }
+                }
+                Ok(Node::Collection {
+                    items: parsed_collection,
+                    #[cfg(test)]
+                    start: pos.0,
+                    #[cfg(test)]
+                    end: pos.1,
+                })
+            }
+        }
+    }
+
+    pub(crate) fn range(&self, fragment: &Vec<usize>) -> Result<Node, ParsingError> {
+        if fragment.is_empty() {
+            return Err(ParsingError::NoFragment);
+        }
+        enum State {
+            First,
+            Range,
+            Second,
+        }
+        let mut start = true;
+        let mut pos = (0_usize, 0_usize);
+        let mut state = State::First;
+        let mut limits = (String::new(), String::new());
+        for token_index in fragment.iter() {
+            if let Some(token) = self.tokens.get(token_index) {
+                match token {
+                    TokenKind::OpeningBracket => {
+                        return Err(ParsingError::ExtraOpeningBracket(*token_index))
+                    }
+                    TokenKind::ClosingBracket => {
+                        return Err(ParsingError::ExtraClosingBracket(*token_index))
+                    }
+                    TokenKind::Empty(_) | TokenKind::Comma => {
+                        return Err(ParsingError::NoCommaInRange(*token_index))
+                    }
+                    // NOTE: potential a..z feature
+                    TokenKind::Text(_) => return Err(ParsingError::NoTextInRange(*token_index)),
+                    TokenKind::Number(l) => {
+                        // below boilerplate code is for:
+                        // in case, some stupid uses multiple number tokens one after another.
+                        match state {
+                            State::First => {
+                                if start {
+                                    pos.0 = *token_index;
+                                    start = false;
+                                }
+                                limits.0.push_str(
+                                    self.get_a_slice_of_cake(*token_index, *token_index + l)
+                                        .as_str(),
+                                );
+                            }
+                            State::Range => {
+                                state = State::Second;
+                                limits.1.push_str(
+                                    self.get_a_slice_of_cake(*token_index, *token_index + l)
+                                        .as_str(),
+                                );
+                                pos.1 = *token_index + l;
+                            }
+                            State::Second => {
+                                limits.1.push_str(
+                                    self.get_a_slice_of_cake(*token_index, *token_index + l)
+                                        .as_str(),
+                                );
+                                pos.1 = *token_index + l;
+                            }
+                        }
+                    }
+                    TokenKind::Range => match state {
+                        State::First => {
+                            if start {
+                                return Err(ParsingError::StartLimitExpected(*token_index));
+                            }
+                            state = State::Range;
+                            pos.1 = *token_index + 2;
+                        }
+                        _ => return Err(ParsingError::ExtraRange(*token_index)),
+                    },
+                }
+            }
+        }
+        if limits.1.is_empty() {
+            return Err(ParsingError::EndLimitExpected(pos.1));
+        }
+        Ok(Node::Range {
+            from: limits.0,
+            to: limits.1,
+            #[cfg(test)]
+            start: pos.0,
+            #[cfg(test)]
+            end: pos.1,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use super::*;
-    use crate::tokenizer::Token;
 
     #[test]
-    fn test_feature_empty_collection_item_at_the_end() {
+    fn test_simple_text() {
+        let content = "Akşam vakti geldi!";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::Text(18));
+        let fragment = vec![0_usize];
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
-            parse(&vec![
-                Token::Text(Arc::new("A".into()), 0),
-                Token::OBra(1),
-                Token::Text(Arc::new("B".into()), 2),
-                Token::Comma(3),
-                Token::Text(Arc::new("C".into()), 4),
-                Token::Comma(5),
-                Token::CBra(6),
-            ]),
-            Ok(Node::BraceExpansion {
-                prefix: Some(Box::new(Node::Text {
-                    message: Arc::new("A".into()),
-                    start: 0
-                })),
-                inside: Some(Box::new(Node::Collection {
-                    items: vec![
-                        Node::Text {
-                            message: Arc::new("B".into()),
-                            start: 2
-                        },
-                        Node::Text {
-                            message: Arc::new("C".into()),
-                            start: 4
-                        },
-                        Node::Text {
-                            message: Arc::new(String::new()),
-                            start: 5
-                        },
-                    ],
-                    start: 1,
-                    end: 6
-                })),
-                postfix: None,
+            Node::Text {
+                content: "Akşam vakti geldi!".into(),
                 start: 0,
-                end: 6
-            })
+                end: 18
+            },
+            parser.text(&fragment).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_simple_text2() {
+        let content = "Akşam";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::Text(5));
+        let fragment = vec![0_usize];
+        let parser = Parser::_new(content, tokens).unwrap();
+        assert_eq!(
+            Node::Text {
+                content: "Akşam".into(),
+                start: 0,
+                end: 5
+            },
+            parser.text(&fragment).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_simple_text3() {
+        let content = "A";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::Text(1));
+        let fragment = vec![0_usize];
+        let parser = Parser::_new(content, tokens).unwrap();
+        assert_eq!(
+            Node::Text {
+                content: "A".into(),
+                start: 0,
+                // as if sth. starts at 1st.
+                end: 1
+            },
+            parser.text(&fragment).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_simple_range() {
+        let content = "{3..5}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Number(1));
+        tokens.insert(2, TokenKind::Range);
+        tokens.insert(4, TokenKind::Number(1));
+        tokens.insert(5, TokenKind::ClosingBracket);
+        let parser = Parser::_new(content, tokens).unwrap();
+        let fragment = vec![1, 2, 4];
+        assert_eq!(
+            Node::Range {
+                from: 3.to_string(),
+                to: 5.to_string(),
+                start: 1,
+                end: 5
+            },
+            parser.range(&fragment).unwrap()
+        );
+        let fragment = vec![1, 2];
+        assert_eq!(
+            Err(ParsingError::EndLimitExpected(4)),
+            parser.range(&fragment)
+        );
+        let fragment = vec![2];
+        assert_eq!(
+            Err(ParsingError::StartLimitExpected(2)),
+            parser.range(&fragment)
+        );
+    }
+
+    #[test]
+    fn test_empty_collection() {
+        let content = "{}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::ClosingBracket);
+        let parser = Parser::_new(content, tokens).unwrap();
+        let fragment = vec![0, 1];
+        assert_eq!(
+            Err(ParsingError::NothingInBraces(0)),
+            parser.collection(&fragment)
         )
     }
 
     #[test]
-    fn test_feature_empty_collection_item_at_the_start() {
+    fn test_simple_collection() {
+        let content = "{,A,,B,C,1,3,13,}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Empty(1));
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Empty(2));
+        tokens.insert(5, TokenKind::Text(1));
+        tokens.insert(6, TokenKind::Comma);
+        tokens.insert(7, TokenKind::Text(1));
+        tokens.insert(8, TokenKind::Comma);
+        tokens.insert(9, TokenKind::Number(1));
+        tokens.insert(10, TokenKind::Comma);
+        tokens.insert(11, TokenKind::Number(1));
+        tokens.insert(12, TokenKind::Comma);
+        tokens.insert(13, TokenKind::Number(2));
+        tokens.insert(15, TokenKind::Empty(1));
+        tokens.insert(16, TokenKind::ClosingBracket);
+        let fragment = vec![0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16];
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
-            parse(&vec![
-                Token::Text(Arc::new("A".into()), 0),
-                Token::OBra(1),
-                Token::Comma(2),
-                Token::Text(Arc::new("B".into()), 3),
-                Token::Comma(4),
-                Token::Text(Arc::new("C".into()), 5),
-                Token::CBra(6),
-            ]),
-            Ok(Node::BraceExpansion {
-                prefix: Some(Box::new(Node::Text {
-                    message: Arc::new("A".into()),
-                    start: 0
-                })),
-                inside: Some(Box::new(Node::Collection {
-                    items: vec![
-                        Node::Text {
-                            message: Arc::new(String::new()),
-                            start: 2
-                        },
-                        Node::Text {
-                            message: Arc::new("B".into()),
-                            start: 3
-                        },
-                        Node::Text {
-                            message: Arc::new("C".into()),
-                            start: 5
-                        },
-                    ],
-                    start: 1,
-                    end: 6
-                })),
-                postfix: None,
+            Node::Collection {
+                items: vec![
+                    Node::Text {
+                        content: "".into(),
+                        start: 1,
+                        end: 1
+                    },
+                    Node::Text {
+                        content: "A".into(),
+                        start: 2,
+                        end: 3
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 3,
+                        end: 3
+                    },
+                    Node::Text {
+                        content: "B".into(),
+                        start: 5,
+                        end: 6
+                    },
+                    Node::Text {
+                        content: "C".into(),
+                        start: 7,
+                        end: 8
+                    },
+                    Node::Text {
+                        content: "1".into(),
+                        start: 9,
+                        end: 10
+                    },
+                    Node::Text {
+                        content: "3".into(),
+                        start: 11,
+                        end: 12
+                    },
+                    Node::Text {
+                        content: "13".into(),
+                        start: 13,
+                        end: 15
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 15,
+                        end: 15
+                    },
+                ],
                 start: 0,
-                end: 6
-            })
-        )
+                end: 16
+            },
+            parser.collection(&fragment).unwrap()
+        );
     }
 
     #[test]
-    fn test_feature_empty_collection_item_in_the_middle() {
+    fn test_complex_collection() {
+        let content = "{,A,B{C,D}E,,,F{3..5}G,}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::OpeningBracket);
+        tokens.insert(1, TokenKind::Empty(1));
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Comma);
+        tokens.insert(4, TokenKind::Text(1));
+        tokens.insert(5, TokenKind::OpeningBracket);
+        tokens.insert(6, TokenKind::Text(1));
+        tokens.insert(7, TokenKind::Comma);
+        tokens.insert(8, TokenKind::Text(1));
+        tokens.insert(9, TokenKind::ClosingBracket);
+        tokens.insert(10, TokenKind::Text(1));
+        tokens.insert(11, TokenKind::Empty(3));
+        tokens.insert(14, TokenKind::Text(1));
+        tokens.insert(15, TokenKind::OpeningBracket);
+        tokens.insert(16, TokenKind::Number(1));
+        tokens.insert(17, TokenKind::Range);
+        tokens.insert(19, TokenKind::Number(1));
+        tokens.insert(20, TokenKind::ClosingBracket);
+        tokens.insert(21, TokenKind::Text(1));
+        tokens.insert(22, TokenKind::Empty(1));
+        tokens.insert(23, TokenKind::ClosingBracket);
+        let fragment = vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 19, 20, 21, 22, 23,
+        ];
+        let parser = Parser::_new(content, tokens).unwrap();
         assert_eq!(
-            parse(&vec![
-                Token::Text(Arc::new("A".into()), 0),
-                Token::OBra(1),
-                Token::Text(Arc::new("B".into()), 2),
-                Token::Comma(3),
-                Token::Comma(4),
-                Token::Text(Arc::new("C".into()), 5),
-                Token::CBra(6),
-            ]),
-            Ok(Node::BraceExpansion {
-                prefix: Some(Box::new(Node::Text {
-                    message: Arc::new("A".into()),
-                    start: 0
-                })),
-                inside: Some(Box::new(Node::Collection {
-                    items: vec![
-                        Node::Text {
-                            message: Arc::new("B".into()),
-                            start: 2
-                        },
-                        Node::Text {
-                            message: Arc::new(String::new()),
-                            start: 3
-                        },
-                        Node::Text {
-                            message: Arc::new("C".into()),
-                            start: 5
-                        },
-                    ],
-                    start: 1,
-                    end: 6
-                })),
-                postfix: None,
-                start: 0,
-                end: 6
-            })
-        )
-    }
-
-    #[test]
-    fn test_really_complex() {
-        assert_eq!(
-            parse(&vec![
-                Token::Text(Arc::new("A".into()), 0),
-                Token::OBra(1),
-                Token::Text(Arc::new("B".into()), 2),
-                Token::Comma(3),
-                Token::Text(Arc::new("C".into()), 4),
-                Token::OBra(5),
-                Token::Text(Arc::new("D".into()), 6),
-                Token::Comma(7),
-                Token::Text(Arc::new("E".into()), 8),
-                Token::CBra(9),
-                Token::Text(Arc::new("F".into()), 10),
-                Token::Comma(11),
-                Token::Text(Arc::new("G".into()), 12),
-                Token::CBra(13),
-                Token::Text(Arc::new("H".into()), 14),
-                Token::OBra(15),
-                Token::Text(Arc::new("J".into()), 16),
-                Token::Comma(17),
-                Token::Text(Arc::new("K".into()), 18),
-                Token::CBra(19),
-                Token::Text(Arc::new("L".into()), 20),
-                Token::OBra(21),
-                Token::Number(Arc::new("3".into()), 22),
-                Token::Range(23),
-                Token::Number(Arc::new("5".into()), 25),
-                Token::CBra(26),
-            ]),
-            Ok(Node::BraceExpansion {
-                prefix: Some(Box::new(Node::Text {
-                    message: Arc::new("A".into()),
-                    start: 0
-                })),
-                inside: Some(Box::new(Node::Collection {
-                    items: vec![
-                        Node::Text {
-                            message: Arc::new("B".into()),
-                            start: 2
-                        },
-                        Node::BraceExpansion {
-                            prefix: Some(Box::new(Node::Text {
-                                message: Arc::new("C".into()),
-                                start: 4
-                            })),
-                            inside: Some(Box::new(Node::Collection {
-                                items: vec![
-                                    Node::Text {
-                                        message: Arc::new("D".into()),
-                                        start: 6
-                                    },
-                                    Node::Text {
-                                        message: Arc::new("E".into()),
-                                        start: 8
-                                    },
-                                ],
-                                start: 5,
-                                end: 9
-                            })),
-                            postfix: Some(Box::new(Node::Text {
-                                message: Arc::new("F".into()),
-                                start: 10
-                            })),
+            Node::Collection {
+                items: vec![
+                    Node::Text {
+                        content: "".into(),
+                        start: 1,
+                        end: 1
+                    },
+                    Node::Text {
+                        content: "A".into(),
+                        start: 2,
+                        end: 3
+                    },
+                    Node::BraceExpansion {
+                        prefix: Some(Box::new(Node::Text {
+                            content: "B".into(),
                             start: 4,
-                            end: 10,
+                            end: 5
+                        })),
+                        inside: Some(Box::new(Node::Collection {
+                            items: vec![
+                                Node::Text {
+                                    content: "C".into(),
+                                    start: 6,
+                                    end: 7
+                                },
+                                Node::Text {
+                                    content: "D".into(),
+                                    start: 8,
+                                    end: 9
+                                },
+                            ],
+                            start: 5,
+                            end: 9
+                        })),
+                        postfix: Some(Box::new(Node::Text {
+                            content: "E".into(),
+                            start: 10,
+                            end: 11
+                        })),
+                        start: 4,
+                        end: 11
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 11,
+                        end: 11
+                    },
+                    Node::BraceExpansion {
+                        prefix: Some(Box::new(Node::Text {
+                            content: "F".into(),
+                            start: 14,
+                            end: 15
+                        })),
+                        inside: Some(Box::new(Node::Range {
+                            from: 3.to_string(),
+                            to: 5.to_string(),
+                            start: 16,
+                            end: 20
+                        })),
+                        postfix: Some(Box::new(Node::Text {
+                            content: "G".into(),
+                            start: 21,
+                            end: 22
+                        })),
+                        start: 14,
+                        end: 22
+                    },
+                    Node::Text {
+                        content: "".into(),
+                        start: 22,
+                        end: 22
+                    }
+                ],
+                start: 0,
+                end: 23
+            },
+            parser.collection(&fragment).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_complex() {
+        let content = "A{B,C}D{E,F{G,H}J,K{L,M}N{3..5}}{6..8}";
+        let mut tokens = TokenMap::new();
+        tokens.insert(0, TokenKind::Text(1));
+        tokens.insert(1, TokenKind::OpeningBracket);
+        tokens.insert(2, TokenKind::Text(1));
+        tokens.insert(3, TokenKind::Comma);
+        tokens.insert(4, TokenKind::Text(1));
+        tokens.insert(5, TokenKind::ClosingBracket);
+        tokens.insert(6, TokenKind::Text(1));
+        tokens.insert(7, TokenKind::OpeningBracket);
+        tokens.insert(8, TokenKind::Text(1));
+        tokens.insert(9, TokenKind::Comma);
+        tokens.insert(10, TokenKind::Text(1));
+        tokens.insert(11, TokenKind::OpeningBracket);
+        tokens.insert(12, TokenKind::Text(1));
+        tokens.insert(13, TokenKind::Comma);
+        tokens.insert(14, TokenKind::Text(1));
+        tokens.insert(15, TokenKind::ClosingBracket);
+        tokens.insert(16, TokenKind::Text(1));
+        tokens.insert(17, TokenKind::Comma);
+        tokens.insert(18, TokenKind::Text(1));
+        tokens.insert(19, TokenKind::OpeningBracket);
+        tokens.insert(20, TokenKind::Text(1));
+        tokens.insert(21, TokenKind::Comma);
+        tokens.insert(22, TokenKind::Text(1));
+        tokens.insert(23, TokenKind::ClosingBracket);
+        tokens.insert(24, TokenKind::Text(1));
+        tokens.insert(25, TokenKind::OpeningBracket);
+        tokens.insert(26, TokenKind::Number(1));
+        tokens.insert(27, TokenKind::Range);
+        tokens.insert(29, TokenKind::Number(1));
+        tokens.insert(30, TokenKind::ClosingBracket);
+        tokens.insert(31, TokenKind::ClosingBracket);
+        tokens.insert(32, TokenKind::OpeningBracket);
+        tokens.insert(33, TokenKind::Number(1));
+        tokens.insert(34, TokenKind::Range);
+        tokens.insert(36, TokenKind::Number(1));
+        tokens.insert(37, TokenKind::ClosingBracket);
+        let parser = Parser::_new(content, tokens).unwrap();
+        let _fragment = vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 36, 37,
+        ];
+        assert_eq!(
+            Node::BraceExpansion {
+                prefix: Some(Box::new(Node::Text {
+                    content: "A".into(),
+                    start: 0,
+                    end: 1
+                })),
+                inside: Some(Box::new(Node::Collection {
+                    items: vec![
+                        Node::Text {
+                            content: "B".into(),
+                            start: 2,
+                            end: 3
                         },
                         Node::Text {
-                            message: Arc::new("G".into()),
-                            start: 12
-                        }
+                            content: "C".into(),
+                            start: 4,
+                            end: 5
+                        },
                     ],
                     start: 1,
-                    end: 13
+                    end: 5
                 })),
                 postfix: Some(Box::new(Node::BraceExpansion {
                     prefix: Some(Box::new(Node::Text {
-                        message: Arc::new("H".into()),
-                        start: 14
+                        content: "D".into(),
+                        start: 6,
+                        end: 7
                     })),
                     inside: Some(Box::new(Node::Collection {
                         items: vec![
                             Node::Text {
-                                message: Arc::new("J".into()),
-                                start: 16
+                                content: "E".into(),
+                                start: 8,
+                                end: 9
                             },
-                            Node::Text {
-                                message: Arc::new("K".into()),
-                                start: 18
+                            Node::BraceExpansion {
+                                prefix: Some(Box::new(Node::Text {
+                                    content: "F".into(),
+                                    start: 10,
+                                    end: 11
+                                })),
+                                inside: Some(Box::new(Node::Collection {
+                                    items: vec![
+                                        Node::Text {
+                                            content: "G".into(),
+                                            start: 12,
+                                            end: 13
+                                        },
+                                        Node::Text {
+                                            content: "H".into(),
+                                            start: 14,
+                                            end: 15
+                                        },
+                                    ],
+                                    start: 11,
+                                    end: 15
+                                })),
+                                postfix: Some(Box::new(Node::Text {
+                                    content: "J".into(),
+                                    start: 16,
+                                    end: 17
+                                })),
+                                start: 10,
+                                end: 17
                             },
+                            Node::BraceExpansion {
+                                prefix: Some(Box::new(Node::Text {
+                                    content: "K".into(),
+                                    start: 18,
+                                    end: 19
+                                })),
+                                inside: Some(Box::new(Node::Collection {
+                                    items: vec![
+                                        Node::Text {
+                                            content: "L".into(),
+                                            start: 20,
+                                            end: 21
+                                        },
+                                        Node::Text {
+                                            content: "M".into(),
+                                            start: 22,
+                                            end: 23
+                                        },
+                                    ],
+                                    start: 19,
+                                    end: 23
+                                })),
+                                postfix: Some(Box::new(Node::BraceExpansion {
+                                    prefix: Some(Box::new(Node::Text {
+                                        content: "N".into(),
+                                        start: 24,
+                                        end: 25
+                                    })),
+                                    inside: Some(Box::new(Node::Range {
+                                        from: 3.to_string(),
+                                        to: 5.to_string(),
+                                        start: 26,
+                                        end: 30
+                                    })),
+                                    postfix: None,
+                                    start: 24,
+                                    end: 31
+                                })),
+                                start: 18,
+                                end: 31
+                            }
                         ],
-                        start: 15,
-                        end: 19
+                        start: 7,
+                        end: 31
                     })),
                     postfix: Some(Box::new(Node::BraceExpansion {
-                        prefix: Some(Box::new(Node::Text {
-                            message: Arc::new("L".into()),
-                            start: 20
-                        })),
+                        prefix: None,
                         inside: Some(Box::new(Node::Range {
-                            from: Arc::new("3".into()),
-                            to: Arc::new("5".into()),
-                            start: 21,
-                            end: 26
+                            from: 6.to_string(),
+                            to: 8.to_string(),
+                            start: 33,
+                            end: 37
                         })),
                         postfix: None,
-                        start: 20,
-                        end: 26
+                        start: 32,
+                        end: 38
                     })),
-                    start: 14,
-                    end: 26
+                    start: 6,
+                    end: 38
                 })),
                 start: 0,
-                end: 26
-            })
+                end: 38
+            },
+            parser.parse().unwrap()
         )
     }
 }
