@@ -462,4 +462,11 @@ mod tests {
             ])
         )
     }
+    #[test]
+    fn test_do_not_ignore_digits_before_any_backslashes() {
+        assert_eq!(
+            bracoxidize("1\\\\{a,b}"),
+            Ok(vec!["1\\a".to_owned(), "1\\b".to_owned()])
+        )
+    }
 }
