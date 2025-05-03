@@ -419,4 +419,45 @@ mod tests {
             ])
         );
     }
+
+    #[test]
+    fn test_numbers_with_proceeding_escapees_are_text_now() {
+        assert_eq!(
+            tokenize("1\\\\{a,b}"),
+            Ok(vec![
+                Token::Text(Arc::new("1\\".into()), 1),
+                Token::OBra(3),
+                Token::Text(Arc::new("a".into()), 4),
+                Token::Comma(5),
+                Token::Text(Arc::new("b".into()), 6),
+                Token::CBra(7),
+            ])
+        );
+        assert_eq!(
+            tokenize("1\\a{b,c}"),
+            Ok(vec![
+                Token::Text(Arc::new("1a".into()), 1),
+                Token::OBra(3),
+                Token::Text(Arc::new("b".into()), 4),
+                Token::Comma(5),
+                Token::Text(Arc::new("c".into()), 6),
+                Token::CBra(7),
+            ])
+        );
+        assert_eq!(
+            tokenize("{1\\2,3\\\\{4\\5,6\\7}}"),
+            Ok(vec![
+                Token::OBra(0),
+                Token::Text(Arc::new("12".into()), 2),
+                Token::Comma(4),
+                Token::Text(Arc::new("3\\".into()), 6),
+                Token::OBra(8),
+                Token::Text(Arc::new("45".into()), 10),
+                Token::Comma(12),
+                Token::Text(Arc::new("67".into()), 14),
+                Token::CBra(16),
+                Token::CBra(17),
+            ])
+        );
+    }
 }
