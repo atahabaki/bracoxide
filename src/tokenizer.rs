@@ -171,6 +171,10 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
     while let Some((i, c)) = iter.next() {
         match (c, is_escape) {
             (_, true) => {
+                if !buffers.1.is_empty() {
+                    buffers.0.push_str(&buffers.1);
+                    buffers.1.clear();
+                }
                 buffers.0.push(c);
                 buffers.1.clear();
                 is_escape = false;
