@@ -22,7 +22,7 @@ Add Bracoxide to your Cargo.toml:
 
 ```toml
 [dependencies]
-bracoxide = "0.1.5"
+bracoxide = "0.1.6"
 ```
 
 ## Usage
