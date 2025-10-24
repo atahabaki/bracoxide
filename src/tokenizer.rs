@@ -208,6 +208,12 @@ pub fn tokenize(content: &str) -> Result<Vec<Token>, TokenizationError> {
                 let mut r_iter = iter.clone();
                 if let Some((_ix, cx)) = r_iter.next() {
                     match cx {
+                        '.' if count.0 == count.1 => {
+                            buffers.0.push(c);
+                            buffers.0.push(cx);
+                            tokenize_buffers(&mut tokens, &mut buffers, i + 2);
+                            iter = r_iter;
+                        }
                         '.' => {
                             tokenize_buffers(&mut tokens, &mut buffers, i);
                             tokens.push(Token::Range(i));
@@ -253,6 +259,21 @@ mod tests {
             tokenize(String::new().as_str()),
             Err(TokenizationError::EmptyContent)
         );
+    }
+
+    #[test]
+    fn test_double_dots_noerror() {
+        assert_eq!(
+            tokenize("..{a,b}",),
+            Ok(vec![
+                Token::Text(Arc::new("..".to_string()), 0),
+                Token::OBra(2),
+                Token::Text(Arc::new("a".to_string()), 3),
+                Token::Comma(4),
+                Token::Text(Arc::new("b".to_string()), 5),
+                Token::CBra(6),
+            ])
+        )
     }
 
     #[test]
@@ -326,7 +347,7 @@ mod tests {
             Token::Comma(3),
             Token::Number(Arc::new("2".to_string()), 4),
             Token::CBra(5),
-            Token::Range(6),
+            Token::Text(Arc::new("..".to_string()), 6),
             Token::Text(Arc::new("B".to_string()), 8),
             Token::OBra(9),
             Token::Number(Arc::new("3".to_string()), 10),
@@ -375,7 +396,7 @@ mod tests {
                 Token::Range(3),
                 Token::Number(Arc::new("3".to_owned()), 5),
                 Token::CBra(6),
-                Token::Range(7),
+                Token::Text(Arc::new("..".to_owned()), 7),
                 Token::Text(Arc::new("B".to_owned()), 9),
                 Token::OBra(10),
                 Token::Number(Arc::new("2".to_owned()), 11),
