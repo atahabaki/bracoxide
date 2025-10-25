@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "dev", "rewrite" ]
   pull_request:
     branches: [ "dev" ]
 
