@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[derive(Debug)]
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) enum ParserError {
     NoToken,
 }
@@ -12,11 +13,12 @@ impl std::error::Error for ParserError {}
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::NoToken => write!(f, "Tokens are empty."),
+            Self::NoToken => write!(f, "Tokens are empty."),
         }
     }
 }
 
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) struct Parser<'a> {
     data: &'a str,
     flags: Flag,
@@ -24,7 +26,7 @@ pub(crate) struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn from_tokenizer(tokenizer: Tokenizer<'a>, tokens: Vec<Token>) -> Self {
+    pub(crate) const fn from_tokenizer(tokenizer: Tokenizer<'a>, tokens: Vec<Token>) -> Self {
         Parser {
             data: tokenizer.data,
             flags: tokenizer.flags,
@@ -32,7 +34,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn parse(&self) -> Result<Vec<String>, ParserError> {
+    pub(crate) const fn parse(&self) -> Result<Vec<String>, ParserError> {
         if self.tokens.is_empty() {
             return Err(ParserError::NoToken);
         }

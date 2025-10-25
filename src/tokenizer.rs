@@ -22,12 +22,14 @@ pub(crate) enum TokenKind {
     Number,
 }
 
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) struct Token {
     kind: TokenKind,
     range: Range<usize>,
 }
 
 #[derive(Debug)]
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) enum TokenizerError {
     NoData,
 }
@@ -36,7 +38,7 @@ impl std::error::Error for TokenizerError {}
 impl std::fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TokenizerError::NoData => write!(f, "Data is empty"),
+            Self::NoData => write!(f, "Data is empty"),
         }
     }
 }
@@ -47,7 +49,7 @@ pub(crate) struct Tokenizer<'a> {
 }
 
 impl<'a> Tokenizer<'a> {
-    pub(crate) fn new(data: &'a str, flags: Flag) -> Self {
+    pub(crate) const fn new(data: &'a str, flags: Flag) -> Self {
         Self { data, flags }
     }
 
