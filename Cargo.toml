@@ -7,3 +7,13 @@ repository = "https://github.com/atahabaki/bracoxide"
 license = "MIT"
 keywords = ["brace_expansion","parsing","combination","permutation","string_manipulation"]
 categories = ["parser-implementations"]
+
+[features]
+default = ["advanced_range"]
+variable = []
+numeric_range = []
+char_range = []
+emoji_range = []
+range_padding = []
+arithmetic_range = []
+advanced_range = ["numeric_range", "char_range", "emoji_range", "range_padding", "arithmetic_range"]
