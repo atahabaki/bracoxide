@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::flag::Flag;
+use crate::{flag::Flag, parser::Parser, tokenizer::Tokenizer};
 
 pub(crate) mod flag;
 pub(crate) mod parser;
@@ -15,7 +15,10 @@ pub fn explode_with_flags<'a>(data: &'a str, flags: Flag) -> Result<Vec<String>,
 }
 
 fn _explode<'a>(data: &'a str, flags: Flag) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut possibilities = vec![];
+    let tokenizer = Tokenizer::new(data, flags);
+    let tokens = tokenizer.tokenize()?;
+    let parser = Parser::from_tokenizer(tokenizer, tokens);
+    let possibilities = parser.parse()?;
     Ok(possibilities)
 }
 

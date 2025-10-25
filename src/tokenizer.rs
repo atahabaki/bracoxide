@@ -27,19 +27,30 @@ pub(crate) struct Token {
     range: Range<usize>,
 }
 
+#[derive(Debug)]
 pub(crate) enum TokenizerError {
     NoData,
 }
 
+impl std::error::Error for TokenizerError {}
+impl std::fmt::Display for TokenizerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenizerError::NoData => write!(f, "Data is empty"),
+        }
+    }
+}
+
 pub(crate) struct Tokenizer<'a> {
-    data: &'a str,
-    flags: Flag,
+    pub(crate) data: &'a str,
+    pub(crate) flags: Flag,
 }
 
 impl<'a> Tokenizer<'a> {
     pub(crate) fn new(data: &'a str, flags: Flag) -> Self {
         Self { data, flags }
     }
+
     pub(crate) fn tokenize(&self) -> Result<Vec<Token>, TokenizerError> {
         let data = self.data.to_string();
         if data.is_empty() {
