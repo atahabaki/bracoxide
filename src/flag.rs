@@ -1,5 +1,5 @@
 pub struct Flag {
-    escape_char: char,
+    pub escape_char: char,
 }
 
 impl Default for Flag {
