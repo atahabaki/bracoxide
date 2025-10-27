@@ -1,6 +1,7 @@
 use crate::{
+    Artifact,
     flag::Flag,
-    tokenizer::{Token, Tokenizer},
+    tokenizer::{Token, Tokenizer, Tokens},
 };
 
 #[derive(Debug)]
@@ -22,20 +23,23 @@ impl std::fmt::Display for ParserError {
 pub(crate) struct Parser<'a> {
     data: &'a str,
     flags: Flag,
-    tokens: Vec<Token>,
+    artifact: Artifact<Tokens>,
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) const fn from_tokenizer(tokenizer: Tokenizer<'a>, tokens: Vec<Token>) -> Self {
+    pub(crate) const fn from_tokenizer(
+        tokenizer: Tokenizer<'a>,
+        artifact: Artifact<Tokens>,
+    ) -> Self {
         Parser {
             data: tokenizer.data,
             flags: tokenizer.flags,
-            tokens,
+            artifact,
         }
     }
 
     pub(crate) const fn parse(&self) -> Result<Vec<String>, ParserError> {
-        if self.tokens.is_empty() {
+        if self.artifact.has_any_token() {
             return Err(ParserError::NoToken);
         }
         let mut possibilities = vec![];

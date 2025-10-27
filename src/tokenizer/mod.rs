@@ -1,147 +1,18 @@
-use std::ops::Range;
+pub mod error;
+pub mod state;
+pub mod token;
+pub mod warning;
 
-use crate::flag::Flag;
+use crate::{Artifact, flag::Flag};
+use error::TokenizerError;
+use state::{BufferState, TokenizerState};
+pub(crate) use token::{Token, TokenKind, Tokens};
+pub(crate) use warning::{TokenizerWarning, TokenizerWarnings};
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum TokenKind {
-    OBra,
-    CBra,
-    Comma,
-    #[cfg(feature = "variable")]
-    Colon,
-    #[cfg(any(feature = "arithmetic_range", feature = "range_padding"))]
-    Semicolon,
-    #[cfg(feature = "range_padding")]
-    Equal,
-    #[cfg(feature = "arithmetic_range")]
-    Plus,
-    #[cfg(feature = "arithmetic_range")]
-    Minus,
-    #[cfg(feature = "char_range")]
-    Char,
-    Text,
-    Number,
-}
-
-#[derive(Debug, PartialEq)]
 #[allow(clippy::redundant_pub_crate)]
-pub(crate) struct Token {
-    kind: TokenKind,
-    range: Range<usize>,
-}
-
-impl Token {
-    pub(crate) fn new(kind: TokenKind, range: Range<usize>) -> Self {
-        Self { kind, range }
-    }
-    pub(crate) fn from_start_end(kind: TokenKind, range_start: usize, range_end: usize) -> Self {
-        Self {
-            kind,
-            range: Range {
-                start: range_start,
-                end: range_end,
-            },
-        }
-    }
-}
-
-#[derive(Debug)]
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) enum TokenizerError {
-    NoData,
-}
-
-impl std::error::Error for TokenizerError {}
-impl std::fmt::Display for TokenizerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoData => write!(f, "Data is empty"),
-        }
-    }
-}
-
 pub(crate) struct Tokenizer<'a> {
     pub(crate) data: &'a str,
     pub(crate) flags: Flag,
-}
-
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
-enum BufferState {
-    // None,
-    Escape,
-    #[default]
-    Text,
-    Number,
-    TokenPushed,
-}
-
-struct TokenizerState {
-    // Opening bracket and closing bracket count, respectively
-    count: (usize, usize),
-    // it is actually mix of current state & previous state.
-    previous_buffer_state: BufferState,
-    range: Range<usize>,
-}
-
-impl Default for TokenizerState {
-    fn default() -> Self {
-        Self {
-            count: (0, 0), // It kinda  looks like an owl. Hi, owl>
-            previous_buffer_state: BufferState::default(),
-            range: Range { start: 0, end: 0 },
-        }
-    }
-}
-
-impl TokenizerState {
-    pub fn get_previous_buffer_state(&self) -> BufferState {
-        self.previous_buffer_state
-    }
-    pub fn is_escape(&self) -> bool {
-        self.previous_buffer_state == BufferState::Escape
-    }
-    pub fn set_state_number(&mut self) {
-        self.previous_buffer_state = BufferState::Number
-    }
-    pub fn set_state_text(&mut self) {
-        self.previous_buffer_state = BufferState::Text
-    }
-    pub fn set_state_token(&mut self) {
-        self.previous_buffer_state = BufferState::TokenPushed
-    }
-    pub fn set_escape(&mut self, is_escape: bool) {
-        if is_escape {
-            self.previous_buffer_state = BufferState::Escape;
-        } else {
-            // I can not imagine any other rational stiuations than:
-            // Feel free to create another example, that breaks this mindset?
-            // "These are called '\{', '\}' {Opening,Closing} bracket"
-            // See, I could escape a char inside curly braces but that will be a char no matter what, so the next state
-            // certainly be text.
-            self.previous_buffer_state = BufferState::default();
-        }
-    }
-    pub fn is_inside_curly_brackets(&self) -> bool {
-        self.count.0 > self.count.1
-    }
-    pub fn increment_obra(&mut self) {
-        self.count.0 += 1;
-    }
-    pub fn increment_cbra(&mut self) {
-        self.count.1 += 1;
-    }
-    pub fn increment_range_end(&mut self) {
-        self.range.end = self.range.end + 1;
-    }
-    pub fn decrement_range_end(&mut self) {
-        self.range.end = self.range.end - 1;
-    }
-    pub fn new_range(&mut self, start: usize) {
-        self.range = Range {
-            start,
-            end: start + 1,
-        }
-    }
 }
 
 impl<'a> Tokenizer<'a> {
@@ -149,7 +20,7 @@ impl<'a> Tokenizer<'a> {
         Self { data, flags }
     }
 
-    pub(crate) fn tokenize(&self) -> Result<Vec<Token>, TokenizerError> {
+    pub(crate) fn tokenize(&self) -> Result<Artifact<Tokens>, TokenizerError> {
         let data = self.data.to_string();
         if data.is_empty() {
             return Err(TokenizerError::NoData);
@@ -184,14 +55,14 @@ impl<'a> Tokenizer<'a> {
                 _ if c == escape_char => {
                     // 1. push token based on the previous buffer state
                     state.increment_range_end();
-                    match state.previous_buffer_state {
+                    match state.get_previous_buffer_state() {
                         BufferState::Escape => unreachable!(),
                         BufferState::Text => {
-                            let token = Token::new(TokenKind::Text, state.range.clone());
+                            let token = Token::new(TokenKind::Text, state.get_range());
                             tokens.push(token);
                         }
                         BufferState::Number => {
-                            let token = Token::new(TokenKind::Number, state.range.clone());
+                            let token = Token::new(TokenKind::Number, state.get_range());
                             tokens.push(token);
                         }
                         // it is sth. like
@@ -232,12 +103,14 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        Ok(tokens)
+        todo!()
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::ops::Range;
+
     use super::*;
 
     #[test]
@@ -245,17 +118,18 @@ mod test {
         let mut state = TokenizerState::default();
         state.increment_range_end();
         let expected_range = Range { start: 0, end: 1 };
-        assert_eq!(state.range, expected_range);
+        assert_eq!(state.get_range(), expected_range);
         state.decrement_range_end();
         let expected_range = Range { start: 0, end: 0 };
-        assert_eq!(state.range, expected_range);
+        assert_eq!(state.get_range(), expected_range);
     }
 
     fn the_rest(content: &str, expected_tokens: Vec<Token>) {
         let tokenizer = Tokenizer::new(content, Flag::default());
         let tokens = tokenizer.tokenize();
         assert!(tokens.is_ok());
-        assert_eq!(tokens.unwrap(), expected_tokens);
+        let artifact = Artifact::<Tokens>::new(expected_tokens);
+        assert_eq!(tokens.unwrap(), artifact);
     }
     #[test]
     fn double_escape_considered_as_text() {

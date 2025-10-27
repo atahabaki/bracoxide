@@ -2,9 +2,14 @@ use std::error::Error;
 
 use crate::{flag::Flag, parser::Parser, tokenizer::Tokenizer};
 
+pub(crate) mod artifact;
 pub(crate) mod flag;
 pub(crate) mod parser;
 pub(crate) mod tokenizer;
+pub(crate) mod warning;
+
+pub(crate) use artifact::Artifact;
+pub(crate) use warning::Warning;
 
 pub fn explode(data: &str) -> Result<Vec<String>, Box<dyn Error>> {
     explosion(data, Flag::default())
