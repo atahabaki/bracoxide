@@ -3,7 +3,7 @@ pub mod state;
 pub mod token;
 pub mod warning;
 
-use crate::{Artifact, flag::Flag};
+use crate::{Artifact, Warning, flag::Flag};
 use error::TokenizerError;
 use state::{BufferState, TokenizerState};
 pub(crate) use token::{Token, TokenKind, Tokens};
@@ -26,6 +26,7 @@ impl<'a> Tokenizer<'a> {
             return Err(TokenizerError::NoData);
         }
         let mut tokens = vec![];
+        let mut warnings = vec![];
         let mut iter = data.chars().enumerate();
         let escape_char = self.flags.escape_char;
         let suppress_warning = self.flags.supress_warning;
@@ -45,9 +46,12 @@ impl<'a> Tokenizer<'a> {
                         '{' | ',' | '}' => {
                             state.set_state_text();
                         }
-                        // TODO: Gotta throw an error or warning message
                         _ if suppress_warning => (),
-                        _ => {}
+                        _ => {
+                            warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
+                                position: i,
+                            }));
+                        }
                     }
                     state.set_escape(false);
                 }
@@ -103,7 +107,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        todo!()
+        Ok(Artifact::with_warnings(tokens, warnings))
     }
 }
 
