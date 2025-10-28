@@ -8,6 +8,12 @@ pub(crate) enum TokenKind {
     Comma,
     #[cfg(feature = "variable")]
     Colon,
+    #[cfg(any(
+        feature = "numeric_range",
+        feature = "char_range",
+        feature = "emoji_range",
+    ))]
+    Range,
     #[cfg(any(feature = "arithmetic_range", feature = "range_padding"))]
     Semicolon,
     #[cfg(feature = "range_padding")]
