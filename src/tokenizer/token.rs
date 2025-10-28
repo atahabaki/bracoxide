@@ -1,8 +1,7 @@
 use std::ops::Range;
 
-#[derive(Debug, PartialEq)]
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) enum TokenKind {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenKind {
     OBra,
     CBra,
     Comma,
@@ -28,22 +27,17 @@ pub(crate) enum TokenKind {
     Number,
 }
 
-#[derive(Debug, PartialEq)]
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) struct Token {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Token {
     kind: TokenKind,
     range: Range<usize>,
 }
 
 impl Token {
-    pub(crate) const fn new(kind: TokenKind, range: Range<usize>) -> Self {
+    pub const fn new(kind: TokenKind, range: Range<usize>) -> Self {
         Self { kind, range }
     }
-    pub(crate) const fn from_start_end(
-        kind: TokenKind,
-        range_start: usize,
-        range_end: usize,
-    ) -> Self {
+    pub const fn from_start_end(kind: TokenKind, range_start: usize, range_end: usize) -> Self {
         Self {
             kind,
             range: Range {
@@ -54,4 +48,4 @@ impl Token {
     }
 }
 
-pub(crate) type Tokens = Vec<Token>;
+pub type Tokens = Vec<Token>;

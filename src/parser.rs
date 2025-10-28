@@ -1,12 +1,11 @@
 use crate::{
     Artifact,
     flag::Flag,
-    tokenizer::{Token, Tokenizer, Tokens},
+    tokenizer::{Tokenizer, Tokens},
 };
 
 #[derive(Debug)]
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) enum ParserError {
+pub enum ParserError {
     NoToken,
 }
 
@@ -19,18 +18,14 @@ impl std::fmt::Display for ParserError {
     }
 }
 
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) struct Parser<'a> {
+pub struct Parser<'a> {
     data: &'a str,
     flags: Flag,
     artifact: Artifact<Tokens>,
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) const fn from_tokenizer(
-        tokenizer: Tokenizer<'a>,
-        artifact: Artifact<Tokens>,
-    ) -> Self {
+    pub const fn from_tokenizer(tokenizer: Tokenizer<'a>, artifact: Artifact<Tokens>) -> Self {
         Parser {
             data: tokenizer.data,
             flags: tokenizer.flags,
@@ -38,11 +33,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) const fn parse(&self) -> Result<Vec<String>, ParserError> {
+    pub const fn parse(&self) -> Result<Vec<String>, ParserError> {
         if self.artifact.has_any_token() {
             return Err(ParserError::NoToken);
         }
-        let mut possibilities = vec![];
+        let possibilities = vec![];
         Ok(possibilities)
     }
 }

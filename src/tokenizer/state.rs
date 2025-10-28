@@ -69,6 +69,7 @@ impl TokenizerState {
     pub const fn increment_range_end(&mut self) {
         self.range.end += 1;
     }
+    #[cfg(test)]
     pub const fn decrement_range_end(&mut self) {
         self.range.end -= 1;
     }

@@ -11,10 +11,20 @@ pub(crate) mod warning;
 pub(crate) use artifact::Artifact;
 pub(crate) use warning::Warning;
 
+/// # Errors
+///
+/// - Empty content/data/String
+/// - Somehow tokenizer gets No Token
+// TODO: Update whenever new Error type gets
 pub fn explode(data: &str) -> Result<Vec<String>, Box<dyn Error>> {
     explosion(data, Flag::default())
 }
 
+/// # Errors
+///
+/// - Empty content/data/String
+/// - Somehow tokenizer gets No Token
+// TODO: Update whenever new Error type gets
 pub fn explode_with_flags(data: &str, flags: Flag) -> Result<Vec<String>, Box<dyn Error>> {
     explosion(data, flags)
 }

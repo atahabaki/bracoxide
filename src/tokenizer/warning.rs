@@ -1,6 +1,6 @@
-#[derive(Debug, PartialEq)]
-pub(crate) enum TokenizerWarning {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenizerWarning {
     RedundantEscape { position: usize },
 }
 
-pub(crate) type TokenizerWarnings = Vec<TokenizerWarning>;
+pub type TokenizerWarnings = Vec<TokenizerWarning>;

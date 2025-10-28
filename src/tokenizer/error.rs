@@ -1,6 +1,5 @@
 #[derive(Debug)]
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) enum TokenizerError {
+pub enum TokenizerError {
     NoData,
 }
 

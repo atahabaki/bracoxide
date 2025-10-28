@@ -6,21 +6,266 @@ pub mod warning;
 use crate::{Artifact, Warning, flag::Flag};
 use error::TokenizerError;
 use state::{BufferState, TokenizerState};
-pub(crate) use token::{Token, TokenKind, Tokens};
-pub(crate) use warning::{TokenizerWarning, TokenizerWarnings};
+pub use token::{Token, TokenKind, Tokens};
+pub use warning::TokenizerWarning;
 
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) struct Tokenizer<'a> {
-    pub(crate) data: &'a str,
-    pub(crate) flags: Flag,
+pub struct Tokenizer<'a> {
+    pub data: &'a str,
+    pub flags: Flag,
 }
 
 impl<'a> Tokenizer<'a> {
-    pub(crate) const fn new(data: &'a str, flags: Flag) -> Self {
+    pub const fn new(data: &'a str, flags: Flag) -> Self {
         Self { data, flags }
     }
 
-    pub(crate) fn tokenize(&self) -> Result<Artifact<Tokens>, TokenizerError> {
+    fn handle_escape_mode(
+        &self,
+        warnings: &mut Vec<Warning>,
+        state: &mut TokenizerState,
+        i: usize,
+        c: char,
+    ) {
+        // I can not see any particular reason to use escape char to
+        // escape not special characters so, im making a choice here
+        // escape char is only meant to escape special chars treated as text.
+        // and some special chars are only meaningful in curly brackets, so
+        // if they're not in curly brackets they're also treated as text
+        // so escaping them outside braces are gonna throw warnings around.
+        state.new_range(i);
+        let escape_char = self.flags.escape_char;
+        match c {
+            _ if c == escape_char => {
+                state.set_state_text();
+            }
+            '{' | ',' | '}' => {
+                state.set_state_text();
+            }
+            #[cfg(any(
+                feature = "numeric_range",
+                feature = "char_range",
+                feature = "emoji_range"
+            ))]
+            '.' if state.is_inside_curly_brackets() => {
+                state.set_state_text();
+            }
+            #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
+            '=' if state.is_inside_curly_brackets() => {
+                state.set_state_text();
+            }
+            #[cfg(feature = "variable")]
+            ':' if state.is_inside_curly_brackets() => {
+                state.set_state_text();
+            }
+            #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
+            ';' if state.is_inside_curly_brackets() => {
+                state.set_state_text();
+            }
+            #[cfg(feature = "arithmetic_range")]
+            '+' | '-' if state.is_inside_curly_brackets() => {
+                state.set_state_text();
+            }
+            _ => {
+                state.set_state_text();
+                if !self.flags.supress_warning {
+                    warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
+                        position: i,
+                    }));
+                }
+            }
+        }
+        state.set_escape(false);
+    }
+
+    fn handle_escape_char(tokens: &mut Tokens, state: &mut TokenizerState) {
+        // 1. push token based on the previous buffer state
+        match state.get_previous_buffer_state() {
+            Some(BufferState::Escape) => unreachable!(),
+            Some(BufferState::Text) => {
+                let token = Token::new(TokenKind::Text, state.get_range());
+                tokens.push(token);
+            }
+            Some(BufferState::Number) => {
+                let token = Token::new(TokenKind::Number, state.get_range());
+                tokens.push(token);
+            }
+            // it is sth. like
+            // {a,%
+            //    ^
+            // What would you do, start a new range?
+            // None | Some(BufferState::TokenPushed) => (),
+            _ => (),
+        }
+        // 2. continue
+        state.set_escape(true);
+    }
+
+    fn handle_other(state: &mut TokenizerState, i: usize) {
+        match state.get_previous_buffer_state() {
+            Some(BufferState::Escape) => unreachable!(),
+            Some(BufferState::Text) => state.increment_range_end(),
+            None | Some(BufferState::Number) => {
+                state.set_state_text();
+                state.increment_range_end();
+            }
+            Some(BufferState::TokenPushed) => {
+                state.new_range(i);
+                state.set_state_text();
+            }
+        }
+    }
+
+    fn handle_numeric(state: &mut TokenizerState, i: usize) {
+        match state.get_previous_buffer_state() {
+            // we dealt with this possibility above if somehow reaches to this arm, then pls. for god's sake throw fucking error.
+            Some(BufferState::Escape) => unreachable!(),
+            Some(BufferState::TokenPushed) => {
+                state.new_range(i);
+                state.set_state_number();
+                state.increment_range_end();
+            }
+            Some(_) => state.increment_range_end(),
+            None => {
+                state.set_state_number();
+                state.increment_range_end();
+            }
+        }
+    }
+
+    fn handle_obra(tokens: &mut Tokens, state: &mut TokenizerState, i: usize) {
+        match state.get_previous_buffer_state() {
+            Some(BufferState::Escape) => unreachable!(),
+            Some(buf_state) => {
+                #[cfg(debug_assertions)]
+                {
+                    println!("{:?}, {i:?}", state.get_range());
+                }
+                let token = Token::new(
+                    match buf_state {
+                        BufferState::Escape | BufferState::TokenPushed => {
+                            unreachable!()
+                        }
+                        BufferState::Text => TokenKind::Text,
+                        BufferState::Number => TokenKind::Number,
+                    },
+                    state.get_range(),
+                );
+                tokens.push(token);
+                state.set_state_token();
+            }
+            // None | Some(BufferState::TokenPushed) => (),
+            _ => (),
+        }
+        state.increment_obra();
+        state.new_range(i);
+        let token = Token::new(TokenKind::OBra, state.get_range());
+        tokens.push(token);
+        state.set_state_token();
+    }
+
+    fn handle_cbra(tokens: &mut Tokens, state: &mut TokenizerState, i: usize) {
+        match state.get_previous_buffer_state() {
+            Some(BufferState::TokenPushed) => (),
+            Some(buf_state) => {
+                state.set_range_end_if_biggers_than(i);
+                let token = Token::new(
+                    match buf_state {
+                        BufferState::Text => TokenKind::Text,
+                        BufferState::Number => TokenKind::Number,
+                        _ => unreachable!(),
+                    },
+                    state.get_range(),
+                );
+                tokens.push(token);
+            }
+            // None | Some(BufferState::Escape) => unreachable!(),
+            _ => unreachable!(),
+        }
+        state.new_range(i);
+        let token = Token::new(TokenKind::CBra, state.get_range());
+        tokens.push(token);
+        state.increment_cbra();
+        state.set_state_token();
+    }
+
+    fn handle_comma(tokens: &mut Tokens, state: &mut TokenizerState, i: usize) {
+        match state.get_previous_buffer_state() {
+            Some(BufferState::TokenPushed) => (),
+            Some(buf_state) => {
+                let token = Token::new(
+                    match buf_state {
+                        BufferState::Number => TokenKind::Number,
+                        BufferState::Text => TokenKind::Text,
+                        _ => unreachable!(),
+                    },
+                    state.get_range(),
+                );
+                tokens.push(token);
+                state.set_state_token();
+            }
+            // None | Some(BufferState::Escape) => unreachable!(),
+            _ => (),
+        }
+        let token = Token::from_start_end(TokenKind::Comma, i, i + 1);
+        tokens.push(token);
+        state.set_state_token();
+    }
+
+    fn handle_dot(
+        tokens: &mut Vec<Token>,
+        iter: &mut std::iter::Peekable<std::iter::Enumerate<std::str::Chars<'_>>>,
+        state: &mut TokenizerState,
+        i: usize,
+    ) {
+        // it is already in {}
+        match state.get_previous_buffer_state() {
+            None | Some(BufferState::Escape) => unreachable!(),
+            Some(buf_state) => match iter.peek() {
+                Some((_ix, cx)) => match cx {
+                    '.' => {
+                        match buf_state {
+                            BufferState::Escape => unreachable!(),
+                            BufferState::Text => {
+                                state.set_range_end_if_biggers_than(i);
+                                let token = Token::new(TokenKind::Text, state.get_range());
+                                tokens.push(token);
+                                state.set_state_token();
+                            }
+                            BufferState::Number => {
+                                state.set_range_end_if_biggers_than(i);
+                                let token = Token::new(TokenKind::Number, state.get_range());
+                                tokens.push(token);
+                                state.set_state_token();
+                            }
+                            BufferState::TokenPushed => (),
+                        }
+                        state.new_range(i);
+                        state.increment_range_end();
+                        let token = Token::new(TokenKind::Range, state.get_range());
+                        tokens.push(token);
+                        state.set_state_token();
+                        iter.next();
+                    }
+                    _ => {
+                        state.set_state_text();
+                    }
+                },
+                None => match state.get_previous_buffer_state() {
+                    None | Some(BufferState::Escape) => unreachable!(),
+                    Some(BufferState::TokenPushed) => {
+                        state.new_range(i);
+                        state.set_state_text();
+                    }
+                    Some(_) => {
+                        state.set_state_text();
+                        state.increment_range_end();
+                    }
+                },
+            },
+        }
+    }
+
+    pub fn tokenize(&self) -> Result<Artifact<Tokens>, TokenizerError> {
         let data = self.data.to_string();
         if data.is_empty() {
             return Err(TokenizerError::NoData);
@@ -29,7 +274,6 @@ impl<'a> Tokenizer<'a> {
         let mut warnings = vec![];
         let mut iter = data.chars().enumerate().peekable();
         let escape_char = self.flags.escape_char;
-        let suppress_warning = self.flags.supress_warning;
         let mut state = TokenizerState::default();
         while let Some((i, c)) = iter.next() {
             #[cfg(debug_assertions)]
@@ -39,153 +283,20 @@ impl<'a> Tokenizer<'a> {
             match c {
                 // Previously tokenizer met with actual escape char
                 _ if state.is_escape() => {
-                    // I can not see any particular reason to use escape char to
-                    // escape not special characters so, im making a choice here
-                    // escape char is only meant to escape special chars treated as text.
-                    // and some special chars are only meaningful in curly brackets, so
-                    // if they're not in curly brackets they're also treated as text
-                    // so escaping them outside braces are gonna throw warnings around.
-                    state.new_range(i);
-                    match c {
-                        _ if c == escape_char => {
-                            state.set_state_text();
-                        }
-                        '{' | ',' | '}' => {
-                            state.set_state_text();
-                        }
-                        #[cfg(any(
-                            feature = "numeric_range",
-                            feature = "char_range",
-                            feature = "emoji_range"
-                        ))]
-                        '.' if state.is_inside_curly_brackets() => {
-                            state.set_state_text();
-                        }
-                        #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
-                        '=' if state.is_inside_curly_brackets() => {
-                            state.set_state_text();
-                        }
-                        #[cfg(feature = "variable")]
-                        ':' if state.is_inside_curly_brackets() => {
-                            state.set_state_text();
-                        }
-                        #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
-                        ';' if state.is_inside_curly_brackets() => {
-                            state.set_state_text();
-                        }
-                        #[cfg(feature = "arithmetic_range")]
-                        '+' | '-' if state.is_inside_curly_brackets() => {
-                            state.set_state_text();
-                        }
-                        _ => {
-                            state.set_state_text();
-                            if !suppress_warning {
-                                warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
-                                    position: i,
-                                }));
-                            }
-                        }
-                    }
-                    state.set_escape(false);
+                    self.handle_escape_mode(&mut warnings, &mut state, i, c);
                 }
                 // tokenizer met with actual escape char
                 _ if c == escape_char => {
-                    // 1. push token based on the previous buffer state
-                    match state.get_previous_buffer_state() {
-                        Some(BufferState::Escape) => unreachable!(),
-                        Some(BufferState::Text) => {
-                            let token = Token::new(TokenKind::Text, state.get_range());
-                            tokens.push(token);
-                        }
-                        Some(BufferState::Number) => {
-                            let token = Token::new(TokenKind::Number, state.get_range());
-                            tokens.push(token);
-                        }
-                        // it is sth. like
-                        // {a,%
-                        //    ^
-                        // What would you do, start a new range?
-                        // None | Some(BufferState::TokenPushed) => (),
-                        _ => (),
-                    }
-                    // 2. continue
-                    state.set_escape(true);
+                    Self::handle_escape_char(&mut tokens, &mut state);
                 }
                 '{' => {
-                    match state.get_previous_buffer_state() {
-                        Some(BufferState::Escape) => unreachable!(),
-                        Some(buf_state) => {
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("{:?}, {i:?}", state.get_range());
-                            }
-                            let token = Token::new(
-                                match buf_state {
-                                    BufferState::Escape | BufferState::TokenPushed => {
-                                        unreachable!()
-                                    }
-                                    BufferState::Text => TokenKind::Text,
-                                    BufferState::Number => TokenKind::Number,
-                                },
-                                state.get_range(),
-                            );
-                            tokens.push(token);
-                            state.set_state_token();
-                        }
-                        // None | Some(BufferState::TokenPushed) => (),
-                        _ => (),
-                    }
-                    state.increment_obra();
-                    state.new_range(i);
-                    let token = Token::new(TokenKind::OBra, state.get_range());
-                    tokens.push(token);
-                    state.set_state_token();
+                    Self::handle_obra(&mut tokens, &mut state, i);
                 }
                 '}' if state.is_inside_curly_brackets() => {
-                    match state.get_previous_buffer_state() {
-                        Some(BufferState::TokenPushed) => (),
-                        Some(buf_state) => {
-                            state.set_range_end_if_biggers_than(i);
-                            let token = Token::new(
-                                match buf_state {
-                                    BufferState::Text => TokenKind::Text,
-                                    BufferState::Number => TokenKind::Number,
-                                    _ => unreachable!(),
-                                },
-                                state.get_range(),
-                            );
-                            tokens.push(token);
-                        }
-                        // None | Some(BufferState::Escape) => unreachable!(),
-                        _ => unreachable!(),
-                    }
-                    state.new_range(i);
-                    let token = Token::new(TokenKind::CBra, state.get_range());
-                    tokens.push(token);
-                    state.increment_cbra();
-                    state.set_state_token();
+                    Self::handle_cbra(&mut tokens, &mut state, i);
                 }
                 ',' if state.is_inside_curly_brackets() => {
-                    match state.get_previous_buffer_state() {
-                        Some(BufferState::TokenPushed) => (),
-                        Some(buf_state) => {
-                            let token = Token::new(
-                                match buf_state {
-                                    BufferState::Number => TokenKind::Number,
-                                    BufferState::Text => TokenKind::Text,
-                                    _ => unreachable!(),
-                                },
-                                state.get_range(),
-                            );
-                            tokens.push(token);
-                            state.set_state_token();
-                        }
-                        // None | Some(BufferState::Escape) => unreachable!(),
-                        _ => (),
-                    }
-                    let token = Token::from_start_end(TokenKind::Comma, i, i + 1);
-                    tokens.push(token);
-                    state.set_state_token();
+                    Self::handle_comma(&mut tokens, &mut state, i);
                 }
                 #[cfg(any(
                     feature = "numeric_range",
@@ -193,54 +304,7 @@ impl<'a> Tokenizer<'a> {
                     feature = "emoji_range"
                 ))]
                 '.' if state.is_inside_curly_brackets() => {
-                    // it is already in {}
-                    match state.get_previous_buffer_state() {
-                        None | Some(BufferState::Escape) => unreachable!(),
-                        Some(buf_state) => match iter.peek() {
-                            Some((ix, cx)) => match cx {
-                                '.' => {
-                                    match buf_state {
-                                        BufferState::Escape => unreachable!(),
-                                        BufferState::Text => {
-                                            state.set_range_end_if_biggers_than(i);
-                                            let token =
-                                                Token::new(TokenKind::Text, state.get_range());
-                                            tokens.push(token);
-                                            state.set_state_token();
-                                        }
-                                        BufferState::Number => {
-                                            state.set_range_end_if_biggers_than(i);
-                                            let token =
-                                                Token::new(TokenKind::Number, state.get_range());
-                                            tokens.push(token);
-                                            state.set_state_token();
-                                        }
-                                        BufferState::TokenPushed => (),
-                                    }
-                                    state.new_range(i);
-                                    state.increment_range_end();
-                                    let token = Token::new(TokenKind::Range, state.get_range());
-                                    tokens.push(token);
-                                    state.set_state_token();
-                                    iter.next();
-                                }
-                                _ => {
-                                    state.set_state_text();
-                                }
-                            },
-                            None => match state.get_previous_buffer_state() {
-                                None | Some(BufferState::Escape) => unreachable!(),
-                                Some(BufferState::TokenPushed) => {
-                                    state.new_range(i);
-                                    state.set_state_text();
-                                }
-                                Some(_) => {
-                                    state.set_state_text();
-                                    state.increment_range_end();
-                                }
-                            },
-                        },
-                    }
+                    Self::handle_dot(&mut tokens, &mut iter, &mut state, i);
                 }
                 #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
                 '=' if state.is_inside_curly_brackets() => {}
@@ -252,32 +316,8 @@ impl<'a> Tokenizer<'a> {
                 '+' | '-' if state.is_inside_curly_brackets() => {}
                 // NOTE: This one also get non 0-9 numerical digits, arabic etc. They're included to
                 // Not sure, this is what i want, but we'll see...
-                _ if c.is_numeric() => match state.get_previous_buffer_state() {
-                    // we dealt with this possibility above if somehow reaches to this arm, then pls. for god's sake throw fucking error.
-                    Some(BufferState::Escape) => unreachable!(),
-                    Some(BufferState::TokenPushed) => {
-                        state.new_range(i);
-                        state.set_state_number();
-                        state.increment_range_end();
-                    }
-                    Some(_) => state.increment_range_end(),
-                    None => {
-                        state.set_state_number();
-                        state.increment_range_end();
-                    }
-                },
-                _ => match state.get_previous_buffer_state() {
-                    Some(BufferState::Escape) => unreachable!(),
-                    Some(BufferState::Text) => state.increment_range_end(),
-                    None | Some(BufferState::Number) => {
-                        state.set_state_text();
-                        state.increment_range_end();
-                    }
-                    Some(BufferState::TokenPushed) => {
-                        state.new_range(i);
-                        state.set_state_text();
-                    }
-                },
+                _ if c.is_numeric() => Self::handle_numeric(&mut state, i),
+                _ => Self::handle_other(&mut state, i),
             }
         }
         #[cfg(debug_assertions)]
@@ -306,7 +346,7 @@ impl<'a> Tokenizer<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::ops::Range;
+    use core::ops::Range;
 
     use super::*;
 
