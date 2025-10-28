@@ -27,7 +27,7 @@ impl<'a> Tokenizer<'a> {
         }
         let mut tokens = vec![];
         let mut warnings = vec![];
-        let mut iter = data.chars().enumerate();
+        let mut iter = data.chars().enumerate().peekable();
         let escape_char = self.flags.escape_char;
         let suppress_warning = self.flags.supress_warning;
         let mut state = TokenizerState::default();
@@ -191,7 +191,56 @@ impl<'a> Tokenizer<'a> {
                     feature = "char_range",
                     feature = "emoji_range"
                 ))]
-                '.' if state.is_inside_curly_brackets() => {}
+                '.' if state.is_inside_curly_brackets() => {
+                    // it is already in {}
+                    match state.get_previous_buffer_state() {
+                        None | Some(BufferState::Escape) => unreachable!(),
+                        Some(buf_state) => match iter.peek() {
+                            Some((ix, cx)) => match cx {
+                                '.' => {
+                                    match buf_state {
+                                        BufferState::Escape => unreachable!(),
+                                        BufferState::Text => {
+                                            state.set_range_end_if_biggers_than(i);
+                                            let token =
+                                                Token::new(TokenKind::Text, state.get_range());
+                                            tokens.push(token);
+                                            state.set_state_token();
+                                        }
+                                        BufferState::Number => {
+                                            state.set_range_end_if_biggers_than(i);
+                                            let token =
+                                                Token::new(TokenKind::Number, state.get_range());
+                                            tokens.push(token);
+                                            state.set_state_token();
+                                        }
+                                        BufferState::TokenPushed => (),
+                                    }
+                                    state.new_range(i);
+                                    state.increment_range_end();
+                                    let token = Token::new(TokenKind::Range, state.get_range());
+                                    tokens.push(token);
+                                    state.set_state_token();
+                                    iter.next();
+                                }
+                                _ => {
+                                    state.set_state_text();
+                                }
+                            },
+                            None => match state.get_previous_buffer_state() {
+                                None | Some(BufferState::Escape) => unreachable!(),
+                                Some(BufferState::TokenPushed) => {
+                                    state.new_range(i);
+                                    state.set_state_text();
+                                }
+                                Some(_) => {
+                                    state.set_state_text();
+                                    state.increment_range_end();
+                                }
+                            },
+                        },
+                    }
+                }
                 #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
                 '=' if state.is_inside_curly_brackets() => {}
                 #[cfg(feature = "variable")]
@@ -243,10 +292,12 @@ impl<'a> Tokenizer<'a> {
             // let me think, or add a flag for it
             Some(BufferState::Escape) => todo!(),
             Some(BufferState::Text) => {
+                state.set_range_end_if_biggers_than(self.data.len());
                 let token = Token::new(TokenKind::Text, state.get_range());
                 tokens.push(token);
             }
             Some(BufferState::Number) => {
+                state.set_range_end_if_biggers_than(self.data.len());
                 let token = Token::new(TokenKind::Number, state.get_range());
                 tokens.push(token);
             }
