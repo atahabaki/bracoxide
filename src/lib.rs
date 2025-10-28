@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::{flag::Flag, parser::Parser, tokenizer::Tokenizer};
 
 pub(crate) mod artifact;
@@ -8,12 +10,6 @@ pub(crate) mod tokenizer;
 pub(crate) mod warning;
 
 pub(crate) use artifact::Artifact;
-pub(crate) use core::error::Error;
-pub(crate) use core::fmt::{Display, Formatter, Result as FmtResult};
-pub(crate) use core::iter::{Enumerate, Peekable};
-pub(crate) use core::ops::Range;
-pub(crate) use core::result::Result;
-pub(crate) use core::str::Chars;
 pub(crate) use phase::Phase;
 pub(crate) use warning::Warning;
 

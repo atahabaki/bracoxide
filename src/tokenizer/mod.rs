@@ -211,7 +211,7 @@ impl<'a> Tokenizer<'a> {
 
     fn handle_dot(
         tokens: &mut Vec<Token>,
-        iter: &mut crate::Peekable<crate::Enumerate<crate::Chars<'_>>>,
+        iter: &mut std::iter::Peekable<std::iter::Enumerate<std::str::Chars<'_>>>,
         state: &mut TokenizerState,
         i: usize,
     ) {
@@ -344,7 +344,7 @@ impl<'a> Tokenizer<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::Range;
+    use core::ops::Range;
 
     use super::*;
 
