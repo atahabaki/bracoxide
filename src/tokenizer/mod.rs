@@ -32,12 +32,19 @@ impl<'a> Tokenizer<'a> {
         let suppress_warning = self.flags.supress_warning;
         let mut state = TokenizerState::default();
         while let Some((i, c)) = iter.next() {
+            #[cfg(debug_assertions)]
+            {
+                println!("{:?}", state);
+            }
             match c {
                 // Previously tokenizer met with actual escape char
                 _ if state.is_escape() => {
                     // I can not see any particular reason to use escape char to
                     // escape not special characters so, im making a choice here
                     // escape char is only meant to escape special chars treated as text.
+                    // and some special chars are only meaningful in curly brackets, so
+                    // if they're not in curly brackets they're also treated as text
+                    // so escaping them outside braces are gonna throw warnings around.
                     state.new_range(i);
                     match c {
                         _ if c == escape_char => {
@@ -46,11 +53,37 @@ impl<'a> Tokenizer<'a> {
                         '{' | ',' | '}' => {
                             state.set_state_text();
                         }
-                        _ if suppress_warning => (),
+                        #[cfg(any(
+                            feature = "numeric_range",
+                            feature = "char_range",
+                            feature = "emoji_range"
+                        ))]
+                        '.' if state.is_inside_curly_brackets() => {
+                            state.set_state_text();
+                        }
+                        #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
+                        '=' if state.is_inside_curly_brackets() => {
+                            state.set_state_text();
+                        }
+                        #[cfg(feature = "variable")]
+                        ':' if state.is_inside_curly_brackets() => {
+                            state.set_state_text();
+                        }
+                        #[cfg(any(feature = "range_padding", feature = "arithmetic_range"))]
+                        ';' if state.is_inside_curly_brackets() => {
+                            state.set_state_text();
+                        }
+                        #[cfg(feature = "arithmetic_range")]
+                        '+' | '-' if state.is_inside_curly_brackets() => {
+                            state.set_state_text();
+                        }
                         _ => {
-                            warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
-                                position: i,
-                            }));
+                            state.set_state_text();
+                            if !suppress_warning {
+                                warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
+                                    position: i,
+                                }));
+                            }
                         }
                     }
                     state.set_escape(false);
@@ -58,14 +91,13 @@ impl<'a> Tokenizer<'a> {
                 // tokenizer met with actual escape char
                 _ if c == escape_char => {
                     // 1. push token based on the previous buffer state
-                    state.increment_range_end();
                     match state.get_previous_buffer_state() {
-                        BufferState::Escape => unreachable!(),
-                        BufferState::Text => {
+                        Some(BufferState::Escape) => unreachable!(),
+                        Some(BufferState::Text) => {
                             let token = Token::new(TokenKind::Text, state.get_range());
                             tokens.push(token);
                         }
-                        BufferState::Number => {
+                        Some(BufferState::Number) => {
                             let token = Token::new(TokenKind::Number, state.get_range());
                             tokens.push(token);
                         }
@@ -73,7 +105,8 @@ impl<'a> Tokenizer<'a> {
                         // {a,%
                         //    ^
                         // What would you do, start a new range?
-                        BufferState::TokenPushed => (),
+                        Some(BufferState::TokenPushed) => (),
+                        None => (),
                     }
                     // 2. continue
                     state.set_escape(true);
@@ -101,11 +134,61 @@ impl<'a> Tokenizer<'a> {
                 '+' | '-' if state.is_inside_curly_brackets() => {}
                 // NOTE: This one also get non 0-9 numerical digits, arabic etc. They're included to
                 // Not sure, this is what i want, but we'll see...
-                _ if c.is_numeric() => {}
-                _ => {
-                    state.increment_range_end();
+                _ if c.is_numeric() => match state.get_previous_buffer_state() {
+                    // we dealt with this possibility above if somehow reaches to this arm, then pls. for god's sake throw fucking error.
+                    Some(BufferState::Escape) => unreachable!(),
+                    Some(BufferState::Text) => state.increment_range_end(),
+                    Some(BufferState::Number) => state.increment_range_end(),
+                    Some(BufferState::TokenPushed) => {
+                        state.new_range(i);
+                        state.set_state_number();
+                        state.increment_range_end();
+                    }
+                    None => {
+                        state.set_state_number();
+                        state.increment_range_end();
+                    }
+                },
+                _ => match state.get_previous_buffer_state() {
+                    Some(BufferState::Escape) => unreachable!(),
+                    Some(BufferState::Text) => state.increment_range_end(),
+                    Some(BufferState::Number) => {
+                        state.set_state_text();
+                        state.increment_range_end();
+                    }
+                    Some(BufferState::TokenPushed) => {
+                        state.new_range(i);
+                        state.set_state_text();
+                    }
+                    None => {
+                        state.set_state_text();
+                        state.increment_range_end();
+                    }
+                },
+            }
+        }
+        #[cfg(debug_assertions)]
+        {
+            println!("{:?}", state);
+        }
+        match state.get_previous_buffer_state() {
+            // This arm is kinda like 'banana1345%' where the % is the escape, how should we handle this?
+            // let me think, or add a flag for it
+            Some(BufferState::Escape) => todo!(),
+            Some(BufferState::Text) => {
+                let token = Token::new(TokenKind::Text, state.get_range());
+                tokens.push(token);
+            }
+            Some(BufferState::Number) => {
+                let token = Token::new(TokenKind::Number, state.get_range());
+                tokens.push(token);
+            }
+            Some(BufferState::TokenPushed) => {
+                if tokens.len() > 0 {
+                    ()
                 }
             }
+            None => (),
         }
         Ok(Artifact::with_warnings(tokens, warnings))
     }
@@ -176,17 +259,21 @@ mod test {
         let content = "banana%%1345";
         let expected_tokens = vec![
             Token::from_start_end(TokenKind::Text, 0, 6), // 'banana'
-            Token::from_start_end(TokenKind::Text, 7, 8), // '%'
-            Token::from_start_end(TokenKind::Number, 8, 12), // '1345'
+            Token::from_start_end(TokenKind::Text, 7, 12), // '%1345'
         ];
+        the_rest(content, expected_tokens);
+    }
+    #[test]
+    fn pure_number() {
+        let content = "1345";
+        let expected_tokens = vec![Token::from_start_end(TokenKind::Number, 0, 4)];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn number_text() {
         let content = "1345banana";
         let expected_tokens = vec![
-            Token::from_start_end(TokenKind::Number, 0, 4), // '1345'
-            Token::from_start_end(TokenKind::Text, 4, 10),  // 'banana'
+            Token::from_start_end(TokenKind::Text, 0, 10), // '1345banana'
         ];
         the_rest(content, expected_tokens);
     }

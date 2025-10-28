@@ -1,8 +1,7 @@
 use std::ops::Range;
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(super) enum BufferState {
-    // None,
     Escape,
     #[default]
     Text,
@@ -10,11 +9,12 @@ pub(super) enum BufferState {
     TokenPushed,
 }
 
+#[derive(Debug)]
 pub(super) struct TokenizerState {
     // Opening bracket and closing bracket count, respectively
     count: (usize, usize),
     // it is actually mix of current state & previous state.
-    previous_buffer_state: BufferState,
+    previous_buffer_state: Option<BufferState>,
     range: Range<usize>,
 }
 
@@ -22,38 +22,39 @@ impl Default for TokenizerState {
     fn default() -> Self {
         Self {
             count: (0, 0), // It kinda  looks like an owl. Hi, owl>
-            previous_buffer_state: BufferState::default(),
+            previous_buffer_state: None,
             range: Range { start: 0, end: 0 },
         }
     }
 }
 
 impl TokenizerState {
-    pub const fn get_previous_buffer_state(&self) -> BufferState {
+    pub const fn get_previous_buffer_state(&self) -> Option<BufferState> {
         self.previous_buffer_state
     }
     pub fn is_escape(&self) -> bool {
-        self.previous_buffer_state == BufferState::Escape
+        self.previous_buffer_state == Some(BufferState::Escape)
     }
     pub const fn set_state_number(&mut self) {
-        self.previous_buffer_state = BufferState::Number
+        self.previous_buffer_state = Some(BufferState::Number)
     }
     pub const fn set_state_text(&mut self) {
-        self.previous_buffer_state = BufferState::Text
+        self.previous_buffer_state = Some(BufferState::Text)
     }
     pub const fn set_state_token(&mut self) {
-        self.previous_buffer_state = BufferState::TokenPushed
+        self.previous_buffer_state = Some(BufferState::TokenPushed)
     }
     pub fn set_escape(&mut self, is_escape: bool) {
+        let previous_buffer_state = self.previous_buffer_state;
         if is_escape {
-            self.previous_buffer_state = BufferState::Escape;
+            self.previous_buffer_state = Some(BufferState::Escape);
         } else {
             // I can not imagine any other rational stiuations than:
             // Feel free to create another example, that breaks this mindset?
             // "These are called '\{', '\}' {Opening,Closing} bracket"
             // See, I could escape a char inside curly braces but that will be a char no matter what, so the next state
             // certainly be text.
-            self.previous_buffer_state = BufferState::default();
+            self.previous_buffer_state = previous_buffer_state;
         }
     }
     pub const fn is_inside_curly_brackets(&self) -> bool {
