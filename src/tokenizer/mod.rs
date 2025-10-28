@@ -365,6 +365,7 @@ mod test {
             assert_eq!(",", &content[15..16]);
             assert_eq!("banana123", &content[16..25]);
             assert_eq!("}", &content[25..26]);
+            assert_eq!("!", &content[26..27]);
             let expected_tokens = vec![
                 Token::from_start_end(TokenKind::Text, 0, 9),
                 Token::from_start_end(TokenKind::OBra, 9, 10),
@@ -372,6 +373,7 @@ mod test {
                 Token::from_start_end(TokenKind::Comma, 15, 16),
                 Token::from_start_end(TokenKind::Text, 16, 25),
                 Token::from_start_end(TokenKind::CBra, 25, 26),
+                Token::from_start_end(TokenKind::Text, 26, 27),
             ];
             the_rest(content, expected_tokens);
         }
@@ -395,12 +397,15 @@ mod test {
             assert_eq!("}", &content[40..41]);
             assert_eq!(" curly brackets.", &content[41..57]);
             let expected_tokens = vec![
-                Token::from_start_end(TokenKind::Text, 0, 9),
-                Token::from_start_end(TokenKind::OBra, 9, 10),
-                Token::from_start_end(TokenKind::Text, 10, 15),
-                Token::from_start_end(TokenKind::Comma, 15, 16),
-                Token::from_start_end(TokenKind::Text, 16, 25),
-                Token::from_start_end(TokenKind::CBra, 25, 26),
+                Token::from_start_end(TokenKind::Text, 0, 11),
+                Token::from_start_end(TokenKind::Text, 12, 20),
+                Token::from_start_end(TokenKind::Text, 21, 24),
+                Token::from_start_end(TokenKind::OBra, 24, 25),
+                Token::from_start_end(TokenKind::Text, 25, 32),
+                Token::from_start_end(TokenKind::Comma, 32, 33),
+                Token::from_start_end(TokenKind::Text, 33, 40),
+                Token::from_start_end(TokenKind::CBra, 40, 41),
+                Token::from_start_end(TokenKind::Text, 41, 57),
             ];
             the_rest(content, expected_tokens);
         }
