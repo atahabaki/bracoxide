@@ -354,6 +354,45 @@ mod test {
         let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 10)];
         the_rest(content, expected_tokens);
     }
+    #[cfg(any(
+        feature = "numeric_range",
+        feature = "char_range",
+        feature = "emoji_range"
+    ))]
+    mod dot {
+        use super::*;
+
+        #[test]
+        fn last_one_is_dot_after_text_in_brace() {
+            let content = "{a,b.";
+            assert_eq!("{", &content[0..1]);
+            assert_eq!("a", &content[1..2]);
+            assert_eq!(",", &content[2..3]);
+            assert_eq!("b.", &content[3..5]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::OBra, 0, 1),
+                Token::from_start_end(TokenKind::Text, 1, 2),
+                Token::from_start_end(TokenKind::Comma, 2, 3),
+                Token::from_start_end(TokenKind::Text, 3, 5),
+            ];
+            the_rest(content, expected_tokens);
+        }
+        #[test]
+        fn last_one_is_dot_in_brace() {
+            let content = "{a,.";
+            assert_eq!("{", &content[0..1]);
+            assert_eq!("a", &content[1..2]);
+            assert_eq!(",", &content[2..3]);
+            assert_eq!(".", &content[3..4]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::OBra, 0, 1),
+                Token::from_start_end(TokenKind::Text, 1, 2),
+                Token::from_start_end(TokenKind::Comma, 2, 3),
+                Token::from_start_end(TokenKind::Text, 3, 4),
+            ];
+            the_rest(content, expected_tokens);
+        }
+    }
 
     mod special_chars_outside_braces_should_not_be_a_problem {
         use super::*;
