@@ -1,7 +1,8 @@
-use crate::tokenizer::TokenizerWarning;
+use crate::Phase;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Warning {
-    Token(TokenizerWarning),
-    // Parser,
+pub trait Warning {
+    fn message(&self) -> String;
+    fn phase(&self) -> Phase {
+        Phase::Tokenizer
+    }
 }

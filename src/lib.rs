@@ -5,10 +5,13 @@ use crate::{flag::Flag, parser::Parser, tokenizer::Tokenizer};
 pub(crate) mod artifact;
 pub(crate) mod flag;
 pub(crate) mod parser;
+pub(crate) mod phase;
 pub(crate) mod tokenizer;
 pub(crate) mod warning;
 
 pub(crate) use artifact::Artifact;
+pub(crate) use phase::Phase;
+pub(crate) use warning::Warning;
 
 /// # Errors
 ///
