@@ -392,6 +392,55 @@ mod test {
             ];
             the_rest(content, expected_tokens);
         }
+
+        #[test]
+        #[cfg(feature = "numeric_range")]
+        fn numeric_range_without_start() {
+            let content = "{..10";
+            assert_eq!("{", &content[0..1]);
+            assert_eq!("..", &content[1..3]);
+            assert_eq!("10", &content[3..5]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::OBra, 0, 1),
+                Token::from_start_end(TokenKind::Range, 1, 3),
+                Token::from_start_end(TokenKind::Number, 3, 5),
+            ];
+            the_rest(content, expected_tokens);
+        }
+
+        #[test]
+        #[cfg(feature = "numeric_range")]
+        fn numeric_range_without_end() {
+            let content = "{10..";
+            assert_eq!("{", &content[0..1]);
+            assert_eq!("10", &content[1..3]);
+            assert_eq!("..", &content[3..5]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::OBra, 0, 1),
+                Token::from_start_end(TokenKind::Number, 1, 3),
+                Token::from_start_end(TokenKind::Range, 3, 5),
+            ];
+            the_rest(content, expected_tokens);
+        }
+
+        #[test]
+        #[cfg(feature = "numeric_range")]
+        fn numeric_range() {
+            let content = "{10..30}";
+            assert_eq!("{", &content[0..1]);
+            assert_eq!("10", &content[1..3]);
+            assert_eq!("..", &content[3..5]);
+            assert_eq!("30", &content[5..7]);
+            assert_eq!("}", &content[7..8]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::OBra, 0, 1),
+                Token::from_start_end(TokenKind::Number, 1, 3),
+                Token::from_start_end(TokenKind::Range, 3, 5),
+                Token::from_start_end(TokenKind::Number, 5, 7),
+                Token::from_start_end(TokenKind::CBra, 7, 8),
+            ];
+            the_rest(content, expected_tokens);
+        }
     }
 
     mod special_chars_outside_braces_should_not_be_a_problem {
