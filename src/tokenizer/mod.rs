@@ -294,13 +294,6 @@ mod test {
         the_rest(content, expected_tokens);
     }
     #[test]
-    fn cbra_outside_braces() {
-        let content = "} Welcome, dear child.";
-        assert_eq!("} Welcome, dear child.", &content[0..22]);
-        let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 22)];
-        the_rest(content, expected_tokens);
-    }
-    #[test]
     fn text_before_after_escape() {
         let content = "E..s %{apple,banana%}...";
         assert_eq!("E..s ", &content[0..5]);
@@ -362,8 +355,56 @@ mod test {
         let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 10)];
         the_rest(content, expected_tokens);
     }
-    #[test]
-    fn special_chars_outside_braces_should_not_be_a_problem() {
-        todo!("Special chars outside curly braces should not throw Err")
+
+    mod special_chars_outside_braces_should_not_be_a_problem {
+        use super::*;
+        #[test]
+        fn comma_outside_braces() {
+            let content = "Welcome, {apple,banana123}!";
+            assert_eq!("Welcome, ", &content[0..9]);
+            assert_eq!("{", &content[9..10]);
+            assert_eq!("apple", &content[10..15]);
+            assert_eq!(",", &content[15..16]);
+            assert_eq!("banana123", &content[16..25]);
+            assert_eq!("}", &content[25..26]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::Text, 0, 9),
+                Token::from_start_end(TokenKind::OBra, 9, 10),
+                Token::from_start_end(TokenKind::Text, 10, 15),
+                Token::from_start_end(TokenKind::Comma, 15, 16),
+                Token::from_start_end(TokenKind::Text, 16, 25),
+                Token::from_start_end(TokenKind::CBra, 25, 26),
+            ];
+            the_rest(content, expected_tokens);
+        }
+        #[test]
+        fn cbra_outside_braces() {
+            let content = "} Welcome, dear child.";
+            assert_eq!("} Welcome, dear child.", &content[0..22]);
+            let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 22)];
+            the_rest(content, expected_tokens);
+        }
+        #[test]
+        fn obra_and_cbra_outside_braces() {
+            let content = "These are '%{' and '%}' {opening,closing} curly brackets.";
+            assert_eq!("These are '", &content[0..11]);
+            assert_eq!("{' and '", &content[12..20]);
+            assert_eq!("}' ", &content[21..24]);
+            assert_eq!("{", &content[24..25]);
+            assert_eq!("opening", &content[25..32]);
+            assert_eq!(",", &content[32..33]);
+            assert_eq!("closing", &content[33..40]);
+            assert_eq!("}", &content[40..41]);
+            assert_eq!(" curly brackets.", &content[41..57]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::Text, 0, 9),
+                Token::from_start_end(TokenKind::OBra, 9, 10),
+                Token::from_start_end(TokenKind::Text, 10, 15),
+                Token::from_start_end(TokenKind::Comma, 15, 16),
+                Token::from_start_end(TokenKind::Text, 16, 25),
+                Token::from_start_end(TokenKind::CBra, 25, 26),
+            ];
+            the_rest(content, expected_tokens);
+        }
     }
 }
