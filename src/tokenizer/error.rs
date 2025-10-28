@@ -3,9 +3,9 @@ pub enum TokenizerError {
     NoData,
 }
 
-impl std::error::Error for TokenizerError {}
-impl std::fmt::Display for TokenizerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl crate::Error for TokenizerError {}
+impl crate::Display for TokenizerError {
+    fn fmt(&self, f: &mut crate::Formatter<'_>) -> crate::FmtResult {
         match self {
             Self::NoData => write!(f, "Data is empty"),
         }

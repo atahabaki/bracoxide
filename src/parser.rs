@@ -9,9 +9,9 @@ pub enum ParserError {
     NoToken,
 }
 
-impl std::error::Error for ParserError {}
-impl std::fmt::Display for ParserError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl crate::Error for ParserError {}
+impl crate::Display for ParserError {
+    fn fmt(&self, f: &mut crate::Formatter<'_>) -> crate::FmtResult {
         match self {
             Self::NoToken => write!(f, "Tokens are empty."),
         }

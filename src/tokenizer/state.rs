@@ -1,4 +1,4 @@
-use std::ops::Range;
+use crate::Range;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(super) enum BufferState {

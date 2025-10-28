@@ -1,4 +1,4 @@
-use std::ops::Range;
+use crate::Range;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenKind {
