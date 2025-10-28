@@ -143,7 +143,7 @@ impl<'a> Tokenizer<'a> {
                 '}' if state.is_inside_curly_brackets() => {
                     match state.get_previous_buffer_state() {
                         Some(BufferState::Escape) => unreachable!(),
-                        Some(BufferState::TokenPushed) => todo!(),
+                        Some(BufferState::TokenPushed) => (),
                         Some(buf_state) => {
                             state.set_range_end_if_biggers_than(i);
                             let token = Token::new(
