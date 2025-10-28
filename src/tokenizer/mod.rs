@@ -221,22 +221,31 @@ mod test {
     #[test]
     fn double_escape_considered_as_text() {
         let content = "%%";
+        assert_eq!("%", &content[1..2]);
         let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 1, 2)];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn text_before_after_escape() {
         let content = "E..s %{apple,banana%}...";
+        assert_eq!("E..s ", &content[0..5]);
+        assert_eq!("{apple,banana", &content[6..19]);
+        assert_eq!("}...", &content[20..24]);
         let expected_tokens = vec![
-            Token::new(TokenKind::Text, Range { start: 0, end: 5 }), // 'E..s '
-            Token::from_start_end(TokenKind::Text, 6, 19),           // '{apple,banana'
-            Token::from_start_end(TokenKind::Text, 20, 24),          // '}...'
+            Token::new(TokenKind::Text, Range { start: 0, end: 5 }),
+            Token::from_start_end(TokenKind::Text, 6, 19),
+            Token::from_start_end(TokenKind::Text, 20, 24),
         ];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn text_number_in_braces() {
         let content = "{banana,1345}";
+        assert_eq!("{", &content[0..1]);
+        assert_eq!("banana", &content[1..7]);
+        assert_eq!(",", &content[7..8]);
+        assert_eq!("1345", &content[8..12]);
+        assert_eq!("}", &content[12..13]);
         let expected_tokens = vec![
             Token::from_start_end(TokenKind::OBra, 0, 1),
             Token::from_start_end(TokenKind::Text, 1, 7),
@@ -249,32 +258,33 @@ mod test {
     #[test]
     fn text_number() {
         let content = "banana1345";
-        let expected_tokens = vec![
-            Token::from_start_end(TokenKind::Text, 0, 10), // 'banana1345'
-        ];
+        assert_eq!("banana1345", &content[0..10]);
+        let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 10)];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn text_interrupted_by_escape() {
         let content = "banana%%1345";
+        assert_eq!("banana", &content[0..6]);
+        assert_eq!("%1345", &content[7..12]);
         let expected_tokens = vec![
-            Token::from_start_end(TokenKind::Text, 0, 6), // 'banana'
-            Token::from_start_end(TokenKind::Text, 7, 12), // '%1345'
+            Token::from_start_end(TokenKind::Text, 0, 6),
+            Token::from_start_end(TokenKind::Text, 7, 12),
         ];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn pure_number() {
         let content = "1345";
+        assert_eq!("1345", &content[0..4]);
         let expected_tokens = vec![Token::from_start_end(TokenKind::Number, 0, 4)];
         the_rest(content, expected_tokens);
     }
     #[test]
     fn number_text() {
         let content = "1345banana";
-        let expected_tokens = vec![
-            Token::from_start_end(TokenKind::Text, 0, 10), // '1345banana'
-        ];
+        assert_eq!("1345banana", &content[0..10]);
+        let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 10)];
         the_rest(content, expected_tokens);
     }
     #[test]
