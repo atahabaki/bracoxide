@@ -145,7 +145,6 @@ impl<'a> Tokenizer<'a> {
                         Some(BufferState::Escape) => unreachable!(),
                         Some(BufferState::TokenPushed) => todo!(),
                         Some(buf_state) => {
-                            state.decrement_range_end();
                             let token = Token::new(
                                 match buf_state {
                                     BufferState::Text => TokenKind::Text,
@@ -205,13 +204,12 @@ impl<'a> Tokenizer<'a> {
                 _ if c.is_numeric() => match state.get_previous_buffer_state() {
                     // we dealt with this possibility above if somehow reaches to this arm, then pls. for god's sake throw fucking error.
                     Some(BufferState::Escape) => unreachable!(),
-                    Some(BufferState::Text) => state.increment_range_end(),
-                    Some(BufferState::Number) => state.increment_range_end(),
                     Some(BufferState::TokenPushed) => {
                         state.new_range(i);
                         state.set_state_number();
                         state.increment_range_end();
                     }
+                    Some(_) => state.increment_range_end(),
                     None => {
                         state.set_state_number();
                         state.increment_range_end();
@@ -403,6 +401,50 @@ mod test {
                 Token::from_start_end(TokenKind::Comma, 15, 16),
                 Token::from_start_end(TokenKind::Text, 16, 25),
                 Token::from_start_end(TokenKind::CBra, 25, 26),
+            ];
+            the_rest(content, expected_tokens);
+        }
+        #[test]
+        #[cfg(any(
+            feature = "numeric_range",
+            feature = "char_range",
+            feature = "emoji_range"
+        ))]
+        fn dot_outside_braces() {
+            let content = "Prof. {J{ack,ohn},A{lex,dam}}";
+            assert_eq!("Prof. ", &content[0..6]);
+            assert_eq!("{", &content[6..7]);
+            assert_eq!("J", &content[7..8]);
+            assert_eq!("{", &content[8..9]);
+            assert_eq!("ack", &content[9..12]);
+            assert_eq!(",", &content[12..13]);
+            assert_eq!("ohn", &content[13..16]);
+            assert_eq!("}", &content[16..17]);
+            assert_eq!(",", &content[17..18]);
+            assert_eq!("A", &content[18..19]);
+            assert_eq!("{", &content[19..20]);
+            assert_eq!("lex", &content[20..23]);
+            assert_eq!(",", &content[23..24]);
+            assert_eq!("dam", &content[24..27]);
+            assert_eq!("}", &content[27..28]);
+            assert_eq!("}", &content[28..29]);
+            let expected_tokens = vec![
+                Token::from_start_end(TokenKind::Text, 0, 6),
+                Token::from_start_end(TokenKind::OBra, 6, 7),
+                Token::from_start_end(TokenKind::Text, 7, 8),
+                Token::from_start_end(TokenKind::OBra, 8, 9),
+                Token::from_start_end(TokenKind::Text, 9, 12),
+                Token::from_start_end(TokenKind::Comma, 12, 13),
+                Token::from_start_end(TokenKind::Text, 13, 16),
+                Token::from_start_end(TokenKind::CBra, 16, 17),
+                Token::from_start_end(TokenKind::Comma, 17, 18),
+                Token::from_start_end(TokenKind::Text, 18, 19),
+                Token::from_start_end(TokenKind::OBra, 19, 20),
+                Token::from_start_end(TokenKind::Text, 20, 23),
+                Token::from_start_end(TokenKind::Comma, 23, 24),
+                Token::from_start_end(TokenKind::Text, 24, 27),
+                Token::from_start_end(TokenKind::CBra, 27, 28),
+                Token::from_start_end(TokenKind::CBra, 28, 29),
             ];
             the_rest(content, expected_tokens);
         }
