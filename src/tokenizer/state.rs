@@ -36,15 +36,15 @@ impl TokenizerState {
         self.previous_buffer_state == Some(BufferState::Escape)
     }
     pub const fn set_state_number(&mut self) {
-        self.previous_buffer_state = Some(BufferState::Number)
+        self.previous_buffer_state = Some(BufferState::Number);
     }
     pub const fn set_state_text(&mut self) {
-        self.previous_buffer_state = Some(BufferState::Text)
+        self.previous_buffer_state = Some(BufferState::Text);
     }
     pub const fn set_state_token(&mut self) {
-        self.previous_buffer_state = Some(BufferState::TokenPushed)
+        self.previous_buffer_state = Some(BufferState::TokenPushed);
     }
-    pub fn set_escape(&mut self, is_escape: bool) {
+    pub const fn set_escape(&mut self, is_escape: bool) {
         let previous_buffer_state = self.previous_buffer_state;
         if is_escape {
             self.previous_buffer_state = Some(BufferState::Escape);
@@ -81,7 +81,7 @@ impl TokenizerState {
     pub fn get_range(&self) -> Range<usize> {
         self.range.clone()
     }
-    pub fn set_range_end_if_biggers_than(&mut self, this: usize) {
+    pub const fn set_range_end_if_biggers_than(&mut self, this: usize) {
         if self.range.end > this {
             self.range.end = this;
         }

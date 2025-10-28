@@ -34,7 +34,7 @@ impl<'a> Tokenizer<'a> {
         while let Some((i, c)) = iter.next() {
             #[cfg(debug_assertions)]
             {
-                println!("{:?}", state);
+                println!("{state:?}");
             }
             match c {
                 // Previously tokenizer met with actual escape char
@@ -105,8 +105,8 @@ impl<'a> Tokenizer<'a> {
                         // {a,%
                         //    ^
                         // What would you do, start a new range?
-                        Some(BufferState::TokenPushed) => (),
-                        None => (),
+                        // None | Some(BufferState::TokenPushed) => (),
+                        _ => (),
                     }
                     // 2. continue
                     state.set_escape(true);
@@ -114,25 +114,26 @@ impl<'a> Tokenizer<'a> {
                 '{' => {
                     match state.get_previous_buffer_state() {
                         Some(BufferState::Escape) => unreachable!(),
-                        Some(BufferState::TokenPushed) => (),
                         Some(buf_state) => {
                             #[cfg(debug_assertions)]
                             {
-                                println!("{:?}, {:?}", state.get_range(), i);
+                                println!("{:?}, {i:?}", state.get_range());
                             }
                             let token = Token::new(
                                 match buf_state {
-                                    BufferState::Escape => unreachable!(),
+                                    BufferState::Escape | BufferState::TokenPushed => {
+                                        unreachable!()
+                                    }
                                     BufferState::Text => TokenKind::Text,
                                     BufferState::Number => TokenKind::Number,
-                                    BufferState::TokenPushed => unreachable!(),
                                 },
                                 state.get_range(),
                             );
                             tokens.push(token);
                             state.set_state_token();
                         }
-                        None => (),
+                        // None | Some(BufferState::TokenPushed) => (),
+                        _ => (),
                     }
                     state.increment_obra();
                     state.new_range(i);
@@ -142,7 +143,6 @@ impl<'a> Tokenizer<'a> {
                 }
                 '}' if state.is_inside_curly_brackets() => {
                     match state.get_previous_buffer_state() {
-                        Some(BufferState::Escape) => unreachable!(),
                         Some(BufferState::TokenPushed) => (),
                         Some(buf_state) => {
                             state.set_range_end_if_biggers_than(i);
@@ -156,7 +156,8 @@ impl<'a> Tokenizer<'a> {
                             );
                             tokens.push(token);
                         }
-                        None => (),
+                        // None | Some(BufferState::Escape) => unreachable!(),
+                        _ => unreachable!(),
                     }
                     state.new_range(i);
                     let token = Token::new(TokenKind::CBra, state.get_range());
@@ -166,7 +167,6 @@ impl<'a> Tokenizer<'a> {
                 }
                 ',' if state.is_inside_curly_brackets() => {
                     match state.get_previous_buffer_state() {
-                        Some(BufferState::Escape) => unreachable!(),
                         Some(BufferState::TokenPushed) => (),
                         Some(buf_state) => {
                             let token = Token::new(
@@ -180,7 +180,8 @@ impl<'a> Tokenizer<'a> {
                             tokens.push(token);
                             state.set_state_token();
                         }
-                        None => (),
+                        // None | Some(BufferState::Escape) => unreachable!(),
+                        _ => (),
                     }
                     let token = Token::from_start_end(TokenKind::Comma, i, i + 1);
                     tokens.push(token);
@@ -268,7 +269,7 @@ impl<'a> Tokenizer<'a> {
                 _ => match state.get_previous_buffer_state() {
                     Some(BufferState::Escape) => unreachable!(),
                     Some(BufferState::Text) => state.increment_range_end(),
-                    Some(BufferState::Number) => {
+                    None | Some(BufferState::Number) => {
                         state.set_state_text();
                         state.increment_range_end();
                     }
@@ -276,16 +277,12 @@ impl<'a> Tokenizer<'a> {
                         state.new_range(i);
                         state.set_state_text();
                     }
-                    None => {
-                        state.set_state_text();
-                        state.increment_range_end();
-                    }
                 },
             }
         }
         #[cfg(debug_assertions)]
         {
-            println!("{:?}", state);
+            println!("{state:?}");
         }
         match state.get_previous_buffer_state() {
             // This arm is kinda like 'banana1345%' where the % is the escape, how should we handle this?
@@ -301,12 +298,7 @@ impl<'a> Tokenizer<'a> {
                 let token = Token::new(TokenKind::Number, state.get_range());
                 tokens.push(token);
             }
-            Some(BufferState::TokenPushed) => {
-                if tokens.len() > 0 {
-                    ()
-                }
-            }
-            None => (),
+            None | Some(BufferState::TokenPushed) => (),
         }
         Ok(Artifact::with_warnings(tokens, warnings))
     }
