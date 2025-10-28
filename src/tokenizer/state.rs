@@ -81,4 +81,9 @@ impl TokenizerState {
     pub fn get_range(&self) -> Range<usize> {
         self.range.clone()
     }
+    pub fn set_range_end_if_biggers_than(&mut self, this: usize) {
+        if self.range.end > this {
+            self.range.end = this;
+        }
+    }
 }
