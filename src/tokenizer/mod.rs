@@ -112,12 +112,80 @@ impl<'a> Tokenizer<'a> {
                     state.set_escape(true);
                 }
                 '{' => {
+                    match state.get_previous_buffer_state() {
+                        Some(BufferState::Escape) => unreachable!(),
+                        Some(BufferState::TokenPushed) => (),
+                        Some(buf_state) => {
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("{:?}, {:?}", state.get_range(), i);
+                            }
+                            let token = Token::new(
+                                match buf_state {
+                                    BufferState::Escape => unreachable!(),
+                                    BufferState::Text => TokenKind::Text,
+                                    BufferState::Number => TokenKind::Number,
+                                    BufferState::TokenPushed => unreachable!(),
+                                },
+                                state.get_range(),
+                            );
+                            tokens.push(token);
+                            state.set_state_token();
+                        }
+                        None => (),
+                    }
                     state.increment_obra();
+                    state.new_range(i);
+                    let token = Token::new(TokenKind::OBra, state.get_range());
+                    tokens.push(token);
+                    state.set_state_token();
                 }
-                '}' => {
+                '}' if state.is_inside_curly_brackets() => {
+                    match state.get_previous_buffer_state() {
+                        Some(BufferState::Escape) => unreachable!(),
+                        Some(BufferState::TokenPushed) => todo!(),
+                        Some(buf_state) => {
+                            state.decrement_range_end();
+                            let token = Token::new(
+                                match buf_state {
+                                    BufferState::Text => TokenKind::Text,
+                                    BufferState::Number => TokenKind::Number,
+                                    _ => unreachable!(),
+                                },
+                                state.get_range(),
+                            );
+                            tokens.push(token);
+                        }
+                        None => (),
+                    }
+                    state.new_range(i);
+                    let token = Token::new(TokenKind::CBra, state.get_range());
+                    tokens.push(token);
                     state.increment_cbra();
+                    state.set_state_token();
                 }
-                ',' if state.is_inside_curly_brackets() => {}
+                ',' if state.is_inside_curly_brackets() => {
+                    match state.get_previous_buffer_state() {
+                        Some(BufferState::Escape) => unreachable!(),
+                        Some(BufferState::TokenPushed) => (),
+                        Some(buf_state) => {
+                            let token = Token::new(
+                                match buf_state {
+                                    BufferState::Number => TokenKind::Number,
+                                    BufferState::Text => TokenKind::Text,
+                                    _ => unreachable!(),
+                                },
+                                state.get_range(),
+                            );
+                            tokens.push(token);
+                            state.set_state_token();
+                        }
+                        None => (),
+                    }
+                    let token = Token::from_start_end(TokenKind::Comma, i, i + 1);
+                    tokens.push(token);
+                    state.set_state_token();
+                }
                 #[cfg(any(
                     feature = "numeric_range",
                     feature = "char_range",
@@ -223,6 +291,13 @@ mod test {
         let content = "%%";
         assert_eq!("%", &content[1..2]);
         let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 1, 2)];
+        the_rest(content, expected_tokens);
+    }
+    #[test]
+    fn cbra_outside_braces() {
+        let content = "} Welcome, dear child.";
+        assert_eq!("} Welcome, dear child.", &content[0..22]);
+        let expected_tokens = vec![Token::from_start_end(TokenKind::Text, 0, 22)];
         the_rest(content, expected_tokens);
     }
     #[test]
