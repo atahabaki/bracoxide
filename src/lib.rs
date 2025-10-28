@@ -9,7 +9,6 @@ pub(crate) mod tokenizer;
 pub(crate) mod warning;
 
 pub(crate) use artifact::Artifact;
-pub(crate) use warning::Warning;
 
 /// # Errors
 ///

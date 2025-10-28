@@ -1,7 +1,7 @@
 use crate::{
     Artifact,
     flag::Flag,
-    tokenizer::{Tokenizer, Tokens},
+    tokenizer::{Tokenizer, TokenizerWarning, Tokens},
 };
 
 #[derive(Debug)]
@@ -21,11 +21,14 @@ impl std::fmt::Display for ParserError {
 pub struct Parser<'a> {
     data: &'a str,
     flags: Flag,
-    artifact: Artifact<Tokens>,
+    artifact: Artifact<Tokens, TokenizerWarning>,
 }
 
 impl<'a> Parser<'a> {
-    pub const fn from_tokenizer(tokenizer: Tokenizer<'a>, artifact: Artifact<Tokens>) -> Self {
+    pub const fn from_tokenizer(
+        tokenizer: Tokenizer<'a>,
+        artifact: Artifact<Tokens, TokenizerWarning>,
+    ) -> Self {
         Parser {
             data: tokenizer.data,
             flags: tokenizer.flags,

@@ -3,11 +3,11 @@ pub mod state;
 pub mod token;
 pub mod warning;
 
-use crate::{Artifact, Warning, flag::Flag};
+use crate::{Artifact, flag::Flag};
 use error::TokenizerError;
 use state::{BufferState, TokenizerState};
 pub use token::{Token, TokenKind, Tokens};
-pub use warning::TokenizerWarning;
+pub use warning::{TokenizerWarning, TokenizerWarnings};
 
 pub struct Tokenizer<'a> {
     pub data: &'a str,
@@ -21,7 +21,7 @@ impl<'a> Tokenizer<'a> {
 
     fn handle_escape_mode(
         &self,
-        warnings: &mut Vec<Warning>,
+        warnings: &mut TokenizerWarnings,
         state: &mut TokenizerState,
         i: usize,
         c: char,
@@ -68,9 +68,7 @@ impl<'a> Tokenizer<'a> {
             _ => {
                 state.set_state_text();
                 if !self.flags.supress_warning {
-                    warnings.push(Warning::Token(TokenizerWarning::RedundantEscape {
-                        position: i,
-                    }));
+                    warnings.push(TokenizerWarning::RedundantEscape { position: i });
                 }
             }
         }
@@ -265,7 +263,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub fn tokenize(&self) -> Result<Artifact<Tokens>, TokenizerError> {
+    pub fn tokenize(&self) -> Result<Artifact<Tokens, TokenizerWarning>, TokenizerError> {
         let data = self.data.to_string();
         if data.is_empty() {
             return Err(TokenizerError::NoData);
@@ -365,7 +363,7 @@ mod test {
         let tokenizer = Tokenizer::new(content, Flag::default());
         let tokens = tokenizer.tokenize();
         assert!(tokens.is_ok());
-        let artifact = Artifact::<Tokens>::new(expected_tokens);
+        let artifact = Artifact::<Tokens, TokenizerWarning>::new(expected_tokens);
         assert_eq!(tokens.unwrap(), artifact);
     }
     #[test]
