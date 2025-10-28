@@ -344,7 +344,7 @@ impl<'a> Tokenizer<'a> {
 
 #[cfg(test)]
 mod test {
-    use core::ops::Range;
+    use std::ops::Range;
 
     use super::*;
 
