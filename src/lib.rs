@@ -176,7 +176,9 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
             end: _,
         } => {
             // Get the numeric string length to be used later for zero padding
-            let zero_pad = if from.chars().nth(0) == Some('0') || to.chars().nth(0) == Some('0') {
+            let zero_pad = if from.chars().nth(0) == Some('0') && from.len() > 1
+                || to.chars().nth(0) == Some('0')
+            {
                 if from.len() >= to.len() {
                     from.len()
                 } else {
@@ -432,6 +434,25 @@ mod tests {
         assert_eq!(
             bracoxidize("A{1..10}"),
             Ok(vec![
+                "A1".to_owned(),
+                "A2".to_owned(),
+                "A3".to_owned(),
+                "A4".to_owned(),
+                "A5".to_owned(),
+                "A6".to_owned(),
+                "A7".to_owned(),
+                "A8".to_owned(),
+                "A9".to_owned(),
+                "A10".to_owned(),
+            ])
+        )
+    }
+    #[test]
+    fn test_expand_range_no_padding_allowzero_bracoxidize() {
+        assert_eq!(
+            bracoxidize("A{0..10}"),
+            Ok(vec![
+                "A0".to_owned(),
                 "A1".to_owned(),
                 "A2".to_owned(),
                 "A3".to_owned(),
