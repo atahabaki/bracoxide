@@ -467,6 +467,25 @@ mod tests {
         )
     }
     #[test]
+    fn test_expand_range_zero_padding_bracoxidize_2() {
+        assert_eq!(
+            bracoxidize("A{00..10}"),
+            Ok(vec![
+                "A00".to_owned(),
+                "A01".to_owned(),
+                "A02".to_owned(),
+                "A03".to_owned(),
+                "A04".to_owned(),
+                "A05".to_owned(),
+                "A06".to_owned(),
+                "A07".to_owned(),
+                "A08".to_owned(),
+                "A09".to_owned(),
+                "A10".to_owned(),
+            ])
+        )
+    }
+    #[test]
     fn test_expand_range_zero_padding_bracoxidize() {
         assert_eq!(
             bracoxidize("A{4..06}{01..003}"),
