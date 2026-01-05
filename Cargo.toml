@@ -14,3 +14,18 @@ criterion = "0.5.1"
 [[bench]]
 name = "explode_benchmark"
 harness = false
+
+[features]
+default = ["advanced_range"]
+variable = []
+numeric_range = []
+unicode_range = []
+range_padding = [
+  "numeric_range",
+  # "unicode_range"
+]
+arithmetic_range = [
+  "numeric_range",
+  # "unicode_range"
+]
+advanced_range = ["numeric_range", "range_padding", "arithmetic_range"]
