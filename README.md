@@ -18,11 +18,10 @@ from brace patterns.
 
 ## Installation
 
-Add Bracoxide to your Cargo.toml:
+Add Bracoxide as a dependency:
 
-```toml
-[dependencies]
-bracoxide = "0.1.6"
+```shell
+cargo add bracoxide
 ```
 
 ## Usage
