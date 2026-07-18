@@ -52,10 +52,10 @@ pub(crate) use std::error::Error;
 
 /// Put bash like brace expression and get all the possible outcomes
 /// with proper error messages.
-/// 
+///
 /// ```
 /// use bracoxide::explode;
-/// 
+///
 /// fn main() {
 ///     let content = "mkdir -p ~/{Desktop,{Mus,Publ}ic,{Do{cument,wnload},Template,Video,Picture}s}";
 ///     assert_eq!(explode(content).unwrap(), vec![
@@ -110,9 +110,6 @@ impl Default for Flag {
     }
 }
 
-pub fn explode_with_flags(
-    content: &str,
-    flag: Flag,
-) -> Result<Vec<String>, Box<dyn Error>> {
+pub fn explode_with_flags(content: &str, flag: Flag) -> Result<Vec<String>, Box<dyn Error>> {
     todo!()
 }
