@@ -70,10 +70,16 @@ pub mod tokenizer;
 ///
 /// - `NumConversionFailed(String)`: An error indicating that a number conversion failed during expansion.
 ///                                 It contains a string representing the value that failed to be converted.
+/// - `Interrupted`: The `should_stop` callback given to [expand_with] asked the expansion to stop.
+///
+/// Later releases may add variants, so a `match` on this enum outside the crate needs a `_` arm.
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ExpansionError {
     /// Error indicating that a number conversion failed during expansion.
     NumConversionFailed(String),
+    /// The `should_stop` callback given to [expand_with] returned `true`.
+    Interrupted,
 }
 
 impl std::fmt::Display for ExpansionError {
@@ -82,6 +88,7 @@ impl std::fmt::Display for ExpansionError {
             ExpansionError::NumConversionFailed(content) => {
                 write!(f, "Number conversion of \"{}\" failed.", content)
             }
+            ExpansionError::Interrupted => write!(f, "Expansion was interrupted."),
         }
     }
 }
@@ -123,8 +130,57 @@ impl std::error::Error for ExpansionError {}
 ///
 /// This function operates on valid parsed nodes and does not use unsafe code internally.
 pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError> {
+    expand_with(node, &mut || false)
+}
+
+/// Same as [expand], but calls `should_stop` before making each string, the parts it joins
+/// included, and stops with [ExpansionError::Interrupted] as soon as it returns `true`.
+///
+/// A short pattern can expand into more strings than fit in memory: `{1..4000000000}`
+/// makes 4 billion. `expand_with` lets the caller stop such an expansion, when the user
+/// presses Ctrl+C or a time limit passes, instead of waiting for it to finish.
+///
+/// # Arguments
+///
+/// * `node` - The parsed node to be expanded.
+/// * `should_stop` - Called before each string is made, including the intermediate strings
+///   that get joined into the output, so it can run more times than there are output strings.
+///   Returning `true` stops the expansion.
+///
+/// # Returns
+///
+/// The same strings [expand] returns for `node`, if `should_stop` never returns `true`.
+///
+/// # Examples
+///
+/// ```
+/// use bracoxide::{expand_with, parser::parse, tokenizer::tokenize, ExpansionError};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let node = parse(&tokenize("{1..4000000000}")?)?;
+/// let mut made = 0;
+/// let expanded = expand_with(&node, &mut || {
+///     made += 1;
+///     made > 3
+/// });
+/// assert_eq!(expanded, Err(ExpansionError::Interrupted));
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns [ExpansionError::Interrupted] when `should_stop` returns `true`, and the errors
+/// of [expand] otherwise.
+pub fn expand_with(
+    node: &crate::parser::Node,
+    should_stop: &mut dyn FnMut() -> bool,
+) -> Result<Vec<String>, ExpansionError> {
     match node {
-        parser::Node::Text { message, start: _ } => Ok(vec![message.as_ref().to_owned()]),
+        parser::Node::Text { message, start: _ } => {
+            stop_if(should_stop)?;
+            Ok(vec![message.as_ref().to_owned()])
+        }
         parser::Node::BraceExpansion {
             prefix,
             inside,
@@ -134,23 +190,24 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
         } => {
             let mut inner = vec![];
             let prefixs: Vec<String> = if let Some(prefix) = prefix {
-                expand(prefix)?
+                expand_with(prefix, should_stop)?
             } else {
                 vec!["".to_owned()]
             };
             let insides: Vec<String> = if let Some(inside) = inside {
-                expand(inside)?
+                expand_with(inside, should_stop)?
             } else {
                 vec!["".to_owned()]
             };
             let postfixs: Vec<String> = if let Some(postfix) = postfix {
-                expand(postfix)?
+                expand_with(postfix, should_stop)?
             } else {
                 vec!["".to_owned()]
             };
             for prefix in &prefixs {
                 for inside in &insides {
                     for postfix in &postfixs {
+                        stop_if(should_stop)?;
                         inner.push(format!("{}{}{}", prefix, inside, postfix));
                     }
                 }
@@ -164,7 +221,7 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
         } => {
             let mut inner = vec![];
             for item in items {
-                let expansions = expand(item)?;
+                let expansions = expand_with(item, should_stop)?;
                 inner.extend(expansions);
             }
             Ok(inner)
@@ -176,9 +233,7 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
             end: _,
         } => {
             // Get the numeric string length to be used later for zero padding
-            let zero_pad = if from.chars().nth(0) == Some('0') && from.len() > 1
-                || to.chars().nth(0) == Some('0')
-            {
+            let zero_pad = if from.starts_with('0') && from.len() > 1 || to.starts_with('0') {
                 if from.len() >= to.len() {
                     from.len()
                 } else {
@@ -201,10 +256,20 @@ pub fn expand(node: &crate::parser::Node) -> Result<Vec<String>, ExpansionError>
             let range = from..=to;
             let mut inner = vec![];
             for i in range {
+                stop_if(should_stop)?;
                 inner.push(format!("{:0>width$}", i, width = zero_pad));
             }
             Ok(inner)
         }
+    }
+}
+
+/// [ExpansionError::Interrupted] when `should_stop` returns `true`.
+fn stop_if(should_stop: &mut dyn FnMut() -> bool) -> Result<(), ExpansionError> {
+    if should_stop() {
+        Err(ExpansionError::Interrupted)
+    } else {
+        Ok(())
     }
 }
 
@@ -508,5 +573,58 @@ mod tests {
             bracoxidize("1\\\\{a,b}"),
             Ok(vec!["1\\a".to_owned(), "1\\b".to_owned()])
         )
+    }
+
+    /// The parsed node of `content`, for the tests of [expand_with].
+    fn parsed(content: &str) -> Node {
+        let tokens = tokenizer::tokenize(content).expect("the pattern tokenizes");
+        parser::parse(&tokens).expect("the pattern parses")
+    }
+    #[test]
+    fn test_expand_with_never_stopping_is_expand() {
+        let node = parsed("A{B,C{D,E}F,G}H{J,K}L{3..5}");
+        assert_eq!(expand_with(&node, &mut || false), expand(&node));
+    }
+    #[test]
+    fn test_expand_with_stops_before_text() {
+        let node = Node::Text {
+            message: Arc::new("A".into()),
+            start: 0,
+        };
+        assert_eq!(
+            expand_with(&node, &mut || true),
+            Err(ExpansionError::Interrupted)
+        );
+    }
+    #[test]
+    fn test_expand_with_stops_a_range() {
+        // A range on its own: the parser always puts one in a brace expansion, which
+        // checks too.
+        let node = Node::Range {
+            from: Arc::new("1".into()),
+            to: Arc::new("100000".into()),
+            start: 0,
+            end: 0,
+        };
+        let mut asked = 0;
+        let expanded = expand_with(&node, &mut || {
+            asked += 1;
+            asked > 3
+        });
+        assert_eq!(expanded, Err(ExpansionError::Interrupted));
+        assert_eq!(asked, 4);
+    }
+    #[test]
+    fn test_expand_with_stops_while_joining() {
+        // The two ranges take 3000 calls (the second is joined to an empty prefix once),
+        // then joining them makes a million strings.
+        let node = parsed("{1..1000}{1..1000}");
+        let mut asked = 0;
+        let expanded = expand_with(&node, &mut || {
+            asked += 1;
+            asked > 3500
+        });
+        assert_eq!(expanded, Err(ExpansionError::Interrupted));
+        assert_eq!(asked, 3501);
     }
 }
